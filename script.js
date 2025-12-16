@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: script (3).js
+fullContent:
 /* ===========================
    1. Utilities & Configuration
    =========================== */
@@ -5,9 +9,9 @@ const $ = id => document.getElementById(id);
 const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
-const STORAGE_KEY = 'alertNursingToolData_v4.4'; 
-const ACCORDION_KEY = 'alertNursingToolAccordions_v4.4';
-const UNDO_KEY = 'alertNursingToolUndo_v4.4';
+const STORAGE_KEY = 'alertNursingToolData_v4.5'; 
+const ACCORDION_KEY = 'alertNursingToolAccordions_v4.5';
+const UNDO_KEY = 'alertNursingToolUndo_v4.5';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -81,10 +85,10 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     } 
     // Ghost Candidate (Confirm/Remove)
     else {
-        div.style.border = "1px dashed var(--accent)";
-        div.style.background = "rgba(0, 122, 122, 0.05)";
+        // Styled via CSS (dashed border)
+        div.style.borderStyle = "dashed"; 
         div.innerHTML = `
-            <label style="color:var(--accent);">❓ Confirm Previous Device: ${type}</label>
+            <label>❓ Confirm Previous Device: ${type}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <textarea style="flex: 1;" readonly>${value}</textarea>
             </div>
@@ -105,7 +109,6 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
              computeAllAndSave();
         });
     }
-    div.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function getOxyDeviceText(s) {
@@ -151,6 +154,7 @@ function stackText(id, text) {
 }
 
 function initGhostSpans() {
+    // For Bloods
     document.querySelectorAll('.blood-item').forEach(item => {
         if(!item.querySelector('.ghost-val')) {
             const span = document.createElement('span');
@@ -159,6 +163,37 @@ function initGhostSpans() {
             item.style.marginBottom = "20px"; 
         }
     });
+    // For Vitals (A-E)
+    document.querySelectorAll('.input-with-trend').forEach(wrapper => {
+        if(!wrapper.parentElement.querySelector('.ghost-val')) {
+             const span = document.createElement('span');
+             span.className = 'ghost-val';
+             wrapper.parentElement.appendChild(span);
+             wrapper.parentElement.style.position = "relative";
+             wrapper.style.marginBottom = "14px";
+        }
+    });
+}
+
+function setGhostValue(inputId, value) {
+    const el = $(inputId);
+    if (!el) return;
+    
+    // If it's part of a blood-item or vitals group with .ghost-val
+    let wrapper = el.closest('.blood-item') || el.closest('.col-3') || el.closest('.col-4');
+    if (!wrapper) return;
+    
+    const ghost = wrapper.querySelector('.ghost-val');
+    if (ghost) {
+        ghost.textContent = `Prev: ${value}`;
+        // Ensure styling matches request
+        ghost.style.color = "var(--blue-hint)"; 
+        ghost.style.fontWeight = "700";
+    } else {
+        // Fallback for fields without dedicated ghost span (like text inputs)
+        el.placeholder = `Prev: ${value}`;
+        el.classList.add('scraped-placeholder');
+    }
 }
 
 // === THE DMR PARSER ===
@@ -174,40 +209,54 @@ function processDmrNote() {
     $('pasteError').style.display = 'none';
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
-    
-    // 1. Demographics
-    const name = extract(/Patient:\s*(.*?)\s*\|/);
-    const mrn = extract(/URN:.*?(\d{3,})/);
-    const wardMatch = extract(/Location:\s*(.*?)\s*\|?/); 
-    const admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
-    const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/);
-    const icuLos = extract(/ICU LOS:\s*(\d+)/);
-    const age = extract(/Age:\s*(\d+)/); // New Regex for Age
-    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|\n[A-Z])/);
-    const allergies = extract(/Allergies:\s*(.*?)\n/);
-    const goc = extract(/GOC:\s*(.*?)\n/);
-
-    // Helper to set blue class
     const setScraped = (id, val) => {
         const el = $(id);
         if(el && val) { 
             el.value = val; 
-            el.classList.add('scraped-data'); // Add blue class
-            // Remove class on manual edit
+            el.classList.add('scraped-data'); 
             el.addEventListener('input', () => el.classList.remove('scraped-data'), {once:true});
         }
     };
+
+    // 1. Demographics
+    const name = extract(/Patient:\s*(.*?)\s*\|/);
+    const mrn = extract(/URN:.*?(\d{3,})/);
+    const age = extract(/Age:\s*(\d+)/); 
+    const wardMatch = extract(/Location:\s*(.*?)\s*\|?/); 
+    const admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
+    const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/);
+    const icuLos = extract(/ICU LOS:\s*(\d+)/);
+    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|\n[A-Z])/);
+    const allergies = extract(/Allergies:\s*(.*?)\n/);
+    const goc = extract(/GOC:\s*(.*?)\n/);
+    const prevCat = extract(/ALERT Nursing Review Category - (CAT \d|CAT \d [A-Z]+)/);
 
     setScraped('ptName', name);
     if(mrn) setScraped('ptMrn', mrn.slice(-3));
     if(age) setScraped('ptAge', age);
     
     if(wardMatch) {
+         // Logic to split "3A 12" into Ward and Bed
          const parts = wardMatch.split(' ');
-         if(parts.length > 0) { 
-             $('ptWard').value = parts[0]; 
-             $('ptWard').classList.add('scraped-data');
-             $('ptWard').addEventListener('change', () => $('ptWard').classList.remove('scraped-data'), {once:true});
+         if(parts.length > 0) {
+             const wardCode = parts[0];
+             // Try to select in dropdown
+             const select = $('ptWard');
+             let found = false;
+             for(let i=0; i<select.options.length; i++){
+                 if(select.options[i].value === wardCode) {
+                     select.selectedIndex = i;
+                     found = true; 
+                     break;
+                 }
+             }
+             if(!found) {
+                 select.value = 'Other';
+                 $('ptWardOther').value = wardCode;
+                 updateWardOtherVisibility();
+             }
+             select.classList.add('scraped-data');
+             select.addEventListener('change', () => select.classList.remove('scraped-data'), {once:true});
          }
          if(parts.length > 1) setScraped('ptBed', parts[1]);
     }
@@ -217,23 +266,39 @@ function processDmrNote() {
     
     if(stepdownDate) {
         const [d,m,y] = stepdownDate.split('/');
-        $('stepdownDate').value = `${y}-${m}-${d}`;
+        setScraped('stepdownDate', `${y}-${m}-${d}`);
     }
     
     if(pmh) $('pmh_note').value = pmh.replace(/\n/g, ', ');
     if(allergies) $('allergies_note').value = allergies;
     if(goc) $('goc_note').value = goc;
 
-    // 2. Previous Vitals (Ghost Values - Now Blue)
-    const rr = extract(/RR\s*(\d+)/); 
-    const spo2 = extract(/SpO2\s*(\d+)/); 
-    const hr = extract(/HR\s*(\d+)/); 
-    const bp = extract(/NIBP\s*(\d+\/\d+)/); 
+    if(prevCat) {
+        const catDiv = $('prevCategory');
+        catDiv.textContent = `Last review: ${prevCat}`;
+        catDiv.style.display = 'block';
+    }
+
+    // 2. Previous Vitals (A-E)
+    // Extract from Summary block
+    const rr = extract(/B:.*?RR\s*(\d+)/); 
+    const spo2 = extract(/B:.*?SpO2\s*(\d+)/); 
+    const hr = extract(/C:.*?HR\s*(\d+)/); 
+    const bp = extract(/C:.*?NIBP\s*(\d+\/\d+)/); 
+    const temp = extract(/E:.*?Temp\s*([\d.]+)/); 
     
-    if(rr) { $('b_rr').placeholder = `Prev: ${rr}`; $('b_rr').classList.add('scraped-placeholder'); }
-    if(spo2) { $('b_spo2').placeholder = `Prev: ${spo2}`; $('b_spo2').classList.add('scraped-placeholder'); }
-    if(hr) { $('c_hr').placeholder = `Prev: ${hr}`; $('c_hr').classList.add('scraped-placeholder'); }
-    if(bp) { $('c_nibp').placeholder = `Prev: ${bp}`; $('c_nibp').classList.add('scraped-placeholder'); }
+    if(rr) setGhostValue('b_rr', rr);
+    if(spo2) setGhostValue('b_spo2', spo2);
+    if(hr) setGhostValue('c_hr', hr);
+    if(bp) setGhostValue('c_nibp', bp);
+    if(temp) setGhostValue('e_temp', temp);
+
+    // Text fields (Airway, Mobility) - Populate and Blue
+    const airway = extract(/A:\s*(.*?)(?=\n|B:)/);
+    if(airway && airway !== 'Patent') setScraped('airway_a', airway);
+    
+    const mobility = extract(/Mobility\/MSK:\s*(.*?)\n/);
+    if(mobility) setScraped('ae_mobility', mobility);
 
     // 3. Previous Bloods
     const bloodsBlock = extract(/Bloods:\s*(.*?)\n/);
@@ -249,48 +314,41 @@ function processDmrNote() {
                 const label = parts[0];
                 const val = parts[1];
                 const inputId = map[label];
-                if(inputId && $(inputId)) {
-                    const wrapper = $(inputId).parentElement;
-                    const ghost = wrapper.querySelector('.ghost-val');
-                    if(ghost) {
-                        ghost.textContent = `Prev: ${val}`;
-                        ghost.style.color = "#1d4ed8"; // Bold Blue
-                        ghost.style.fontWeight = "600";
-                    }
-                }
+                if(inputId) setGhostValue(inputId, val);
             }
         });
     }
 
     // 4. Historical Risk Parsing
-    // Reset previous historical risks
-    document.querySelectorAll('.prev-risk-text').forEach(el => el.textContent = '');
+    document.querySelectorAll('.prev-risk-text').forEach(el => { el.textContent = ''; el.style.display='none'; });
     
     const riskSection = text.match(/IDENTIFIED RISK FACTORS:\n([\s\S]*?)(?=\n\n|\nPLAN:|$)/);
     if(riskSection) {
         const riskLines = riskSection[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('-'));
         
         riskLines.forEach(line => {
-            const cleanLine = line.replace(/^-\s*/, '').replace(/^\[.*?\]\s*/, ''); // Remove dash and [CAT X] tag
-            const fullText = cleanLine; // Keep full text including parens e.g. "Renal Concern (Cr rising)"
+            const cleanLine = line.replace(/^-\s*/, '').replace(/^\[.*?\]\s*/, ''); 
+            const displayTx = `Last review: ${cleanLine}`;
             
-            // Keyword Mapping
-            if(cleanLine.match(/Renal/i)) showPrevRisk('prev_renal_info', fullText, 'group_neuro_renal');
-            else if(cleanLine.match(/Respiratory|Airway|Dyspnea/i)) showPrevRisk('prev_resp_info', fullText, 'group_resp');
-            else if(cleanLine.match(/Neuro/i)) showPrevRisk('prev_neuro_info', fullText, 'group_neuro_renal');
-            else if(cleanLine.match(/Infection|Sepsis|WCC|CRP/i)) showPrevRisk('prev_inf_info', fullText, 'group_circ');
-            else if(cleanLine.match(/Vasopressor|Shock/i)) showPrevRisk('prev_pressor_info', fullText, 'group_circ');
-            else if(cleanLine.match(/Hb|Anemia/i)) showPrevRisk('prev_hb_info', fullText, 'group_circ');
-            else if(cleanLine.match(/UOP/i)) showPrevRisk('prev_uop_info', fullText, 'group_neuro_renal'); // UOP specific
-            else if(cleanLine.match(/Electrolyte/i)) showPrevRisk('prev_elec_info', fullText, 'group_neuro_renal');
-            else if(cleanLine.match(/Immobility/i)) showPrevRisk('prev_immob_info', fullText, 'group_neuro_renal');
-            else if(cleanLine.match(/ADDS/i)) showPrevRisk('prev_adds_info', fullText, null);
-            else if(cleanLine.match(/Lactate/i)) showPrevRisk('prev_lac_info', fullText, 'group_circ');
-            else if(cleanLine.match(/Comorbid/i)) showPrevRisk('prev_comorb_info', fullText, 'group_neuro_renal');
+            if(cleanLine.match(/Renal/i)) showPrevRisk('prev_renal_info', displayTx);
+            else if(cleanLine.match(/Respiratory|Airway|Dyspnea/i)) showPrevRisk('prev_resp_info', displayTx);
+            else if(cleanLine.match(/Neuro/i)) showPrevRisk('prev_neuro_info', displayTx);
+            else if(cleanLine.match(/Infection|Sepsis|WCC|CRP/i)) showPrevRisk('prev_inf_info', displayTx);
+            else if(cleanLine.match(/Vasopressor|Shock/i)) showPrevRisk('prev_pressor_info', displayTx);
+            else if(cleanLine.match(/Hb|Anemia/i)) showPrevRisk('prev_hb_info', displayTx);
+            else if(cleanLine.match(/UOP/i)) showPrevRisk('uop_note_wrapper', displayTx); // Special case
+            else if(cleanLine.match(/Electrolyte/i)) showPrevRisk('prev_elec_info', displayTx);
+            else if(cleanLine.match(/Immobility/i)) showPrevRisk('prev_immob_info', displayTx);
+            else if(cleanLine.match(/ADDS/i)) showPrevRisk('prev_adds_info', displayTx);
+            else if(cleanLine.match(/Lactate/i)) showPrevRisk('prev_lac_info', displayTx);
+            else if(cleanLine.match(/Comorbid/i)) showPrevRisk('prev_comorb_info', displayTx);
+            else if(cleanLine.match(/Wean/i)) showPrevRisk('prev_wean_info', displayTx);
+            else if(cleanLine.match(/Intubat/i)) showPrevRisk('prev_tubed_info', displayTx);
+            else if(cleanLine.match(/Historical O2/i)) showPrevRisk('prev_hist_o2_info', displayTx);
         });
     }
 
-    // 5. Devices
+    // 5. Devices (Ghost)
     $('devices-container').innerHTML = '';
     const deviceSection = text.match(/DEVICES:\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/);
     if(deviceSection) {
@@ -307,30 +365,25 @@ function processDmrNote() {
                     details = raw.substring(parenIndex+1, raw.lastIndexOf(')')).trim();
                 }
                 const knownType = deviceTypes.find(t => type.toLowerCase().includes(t.toLowerCase()));
-                if(knownType) {
-                    createDeviceEntry(knownType, details, true);
-                } else {
-                    createDeviceEntry('Other Device', raw, true);
-                }
+                createDeviceEntry(knownType || 'Other Device', details || raw, true);
             }
         });
     }
 
-    $('dmrPasteWrapper').style.display = 'none'; // Auto-hide after process
-    showToast("Note processed! Data scraped in Blue.");
+    // 6. Force Open Bloods
+    const bloodsDetails = document.querySelector('details[data-accordion-id="bloods"]');
+    if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); // Fix: Ensure Bloods accordion ID logic matches
+
+    $('dmrPasteWrapper').style.display = 'none'; 
+    showToast("Note processed! Scraped data in Blue.");
     computeAllAndSave();
 }
 
-function showPrevRisk(elementId, text, groupId) {
+function showPrevRisk(elementId, text) {
     const el = $(elementId);
     if(el) {
-        el.textContent = `⚠ ${text}`; // Full text display
+        el.textContent = `⚠ ${text}`; 
         el.style.display = 'block';
-    }
-    // Auto-expand relevant accordion if in Follow-up mode
-    if(groupId) {
-        const details = $(groupId);
-        if(details) details.setAttribute('open', 'true');
     }
 }
 
@@ -613,6 +666,7 @@ function initialize() {
     
     document.querySelectorAll('.ghost-val').forEach(s => s.textContent='');
     document.querySelectorAll('.prev-risk-text').forEach(s => { s.textContent=''; s.style.display='none'; });
+    $('prevCategory').style.display = 'none';
     
     computeAll();
     saveState(true);
@@ -627,7 +681,6 @@ function initialize() {
 
   $('processPasteBtn').addEventListener('click', processDmrNote);
   
-  // 2. Setup standard interactions
   updateLastSaved();
   initGhostSpans();
   const debouncedComputeAndSave = debounce(()=>{ computeAll(); saveState(true); }, 600);
@@ -832,7 +885,6 @@ function initialize() {
       if (saved) { restoreState(saved); }
   } catch (err) {
       console.error("State restore failed:", err);
-      // Auto-clear corrupt data if restore fails
       localStorage.removeItem(STORAGE_KEY);
   }
   
@@ -863,18 +915,27 @@ function updateLayoutMode(mode) {
     const isFollowUp = (mode === 'followup');
     const pasteWrapper = $('dmrPasteWrapper');
     const riskSections = document.querySelectorAll('details.risk-section');
+    const bloodsAccordion = document.querySelector('details[data-accordion-id="bloods"]');
+    const accordionBtn = document.querySelector('.accordion[aria-controls="panel_bloods"]');
+    const accordionPanel = $('#panel_bloods');
 
     if(isFollowUp) {
         pasteWrapper.style.display = 'block';
-        // Collapse accordions by default in follow-up mode
-        riskSections.forEach(d => {
-            if(!d.hasAttribute('user-interacted')) { // Only collapse if user hasn't messed with it
-                d.removeAttribute('open');
+        // Auto-open Bloods
+        if(accordionPanel) {
+            accordionPanel.style.display = 'block'; 
+            if(accordionBtn) {
+                 accordionBtn.setAttribute('aria-expanded', 'true'); 
+                 accordionBtn.querySelector('.icon').textContent = '[-]';
             }
+        }
+        // Collapse main risk sections to keep compact
+        riskSections.forEach(d => {
+            if(!d.hasAttribute('user-interacted')) d.removeAttribute('open');
         });
     } else {
         pasteWrapper.style.display = 'none';
-        // Expand accordions in other modes
+        // Expand risk sections for Pre/Post review
         riskSections.forEach(d => d.setAttribute('open', 'true'));
     }
 }
@@ -1480,11 +1541,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
   if (contextLines.length) lines.push('', ...contextLines);
   
-  // No longer needed to show Prev Risk in summary as it's for user reference,
-  // but if you want to keep unresolved risks:
-  // (Left as per previous version logic, currently disabled in display to reduce clutter
-  // unless specifically asked for).
-  
   const allFlags = [...red, ...amber];
   if (allFlags.length) lines.push('', 'IDENTIFIED RISK FACTORS:', ...allFlags.map(f=>'- '+f));
   
@@ -1578,3 +1634,5 @@ function openRedcapAccelerator() {
 document.addEventListener('DOMContentLoaded', ()=> {
   initialize();
 });
+
+}
