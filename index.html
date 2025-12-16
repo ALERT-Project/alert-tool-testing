@@ -1,9 +1,13 @@
+{
+type: uploaded file
+fileName: index (3).html
+fullContent:
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v4.4</title>
+  <title>ALERT Nursing Risk Assessment Tool v4.5</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -41,7 +45,7 @@
       <div class="col-12" id="dmrPasteWrapper" style="display:none;">
           <div class="paste-box">
             <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Follow-up: Import Previous Note</div>
-            <label style="font-size:0.85rem;">Paste previous ALERT Summary here to auto-fill demographics, vitals, and see past risks.</label>
+            <label style="font-size:0.85rem;">Paste previous ALERT Summary here to auto-fill demographics, vitals, A-E, and see past risks.</label>
             <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:8px;">
                 <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
@@ -384,7 +388,10 @@
 
   <div class="card">
     <div class="kpi">
-      <div class="box" id="categoryBox"><h3 id="catText" class="status green">CAT 3</h3></div>
+      <div class="box" id="categoryBox">
+          <h3 id="catText" class="status green">CAT 3</h3>
+          <div id="prevCategory" style="display:none; margin-top:4px; font-size:0.8rem; font-weight:700; color:var(--blue-hint);"></div>
+      </div>
       <div class="box"><small>CAT 1 Flags</small><h3 id="redCount">0</h3></div>
       <div class="box"><small>CAT 2 Flags</small><h3 id="amberCount">0</h3></div>
     </div>
@@ -676,3 +683,5 @@
 <script src="script.js"></script>
 </body>
 </html>
+
+}
