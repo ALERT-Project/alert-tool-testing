@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v4.2</title>
+  <title>ALERT Nursing Risk Assessment Tool v4.3</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header role="banner">
@@ -75,7 +75,10 @@
     
     <div class="question-row">
         <div class="question-label">ADDS</div>
-        <input id="adds" type="number" min="0" max="10" />
+        <div class="input-with-trend">
+            <input id="adds" type="number" min="0" max="20" />
+            <div class="trend-buttons" id="adds_trend"></div>
+        </div>
     </div>
     
     <div class="question-row">
@@ -95,6 +98,9 @@
                    <button class="seg-btn" data-value="false">Stable</button>
                 </div>
             </div>
+        </div>
+        <div id="hb_dropping_note_wrapper" class="concern-note" style="display:none; margin-top:8px;">
+            <textarea id="hb_dropping_note" placeholder="Action plan (e.g. PRC given, re-check times)..."></textarea>
         </div>
     </div>
     
@@ -530,8 +536,10 @@
         <div class="blood-item"><label for="bl_wcc">WCC</label><input id="bl_wcc" type="number" step="0.1"/><div class="trend-buttons" id="bl_wcc_trend"></div><span id="bl_wcc_range" class="range-annotation"></span></div>
         <div class="blood-item"><label for="bl_crp">CRP</label><input id="bl_crp" type="number"/><div class="trend-buttons" id="bl_crp_trend"></div><span id="bl_crp_range" class="range-annotation"></span></div>
         <div class="blood-item"><label for="bl_cr_review">Cr</label><input id="bl_cr_review" type="number"/><div class="trend-buttons" id="bl_cr_review_trend"></div><span id="bl_cr_review_range" class="range-annotation"></span></div>
+        <div class="blood-item"><label for="bl_urea">Urea</label><input id="bl_urea" type="number" step="0.1"/><div class="trend-buttons" id="bl_urea_trend"></div><span id="bl_urea_range" class="range-annotation"></span></div>
+        <div class="blood-item"><label for="bl_egfr">eGFR</label><input id="bl_egfr" type="number" step="1"/><div class="trend-buttons" id="bl_egfr_trend"></div><span id="bl_egfr_range" class="range-annotation"></span></div>
         <div class="blood-item"><label for="bl_k">K</label><input id="bl_k" type="number" step="0.1"/><div class="trend-buttons" id="bl_k_trend"></div><span id="bl_k_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_na">Na</label><input id="bl_na" type="number" step="1"/><div class="trend-buttons" id="bl_na_trend"></div><span id_=""bl_na_range" class="range-annotation"></span></div>
+        <div class="blood-item"><label for="bl_na">Na</label><input id="bl_na" type="number" step="1"/><div class="trend-buttons" id="bl_na_trend"></div><span id="bl_na_range" class="range-annotation"></span></div>
         <div class="blood-item"><label for="bl_mg">Mg</label><input id="bl_mg" type="number" step="0.1"/><div class="trend-buttons" id="bl_mg_trend"></div><span id="bl_mg_range" class="range-annotation"></span></div>
         <div class="blood-item"><label for="bl_phos">PO4</label><input id="bl_phos" type="number" step="0.1"/><div class="trend-buttons" id="bl_phos_trend"></div><span id="bl_phos_range" class="range-annotation"></span></div>
         <div class="blood-item"><label for="bl_plts">Plts</label><input id="bl_plts" type="number"/><div class="trend-buttons" id="bl_plts_trend"></div><span id="bl_plts_range" class="range-annotation"></span></div>
@@ -564,6 +572,7 @@
        <div class="button-group" style="justify-content: flex-start; flex-wrap: wrap;">
            <button class="btn small" data-device-type="CVC">+ Add CVC</button>
            <button class="btn small" data-device-type="Other CVAD">+ Add Other CVAD</button>
+           <button class="btn small" data-device-type="PICC Line">+ Add PICC</button>
            <button class="btn small" data-device-type="PIVC">+ Add PIVC</button>
            <button class="btn small" data-device-type="Enteral Tube">+ Add Enteral Tube</button>
            <button class="btn small" data-device-type="IDC">+ Add IDC</button>
