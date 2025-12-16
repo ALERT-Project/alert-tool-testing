@@ -76,7 +76,8 @@ textarea{min-height:80px; resize:vertical; max-height:240px;}
 .trend-btn { font-size: 0.9rem; border: 1px solid var(--line); background: transparent; border-radius: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); padding:0;}
 .trend-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 .blood-abnormal { border-color: var(--red) !important; background-color: rgba(239,68,68,.06) !important; }
-.range-annotation { font-size: 0.75rem; color: var(--muted); position: absolute; bottom: -14px; left: 56px; display: none; }
+/* FIX: Adjusted range annotation bottom so it doesn't float away */
+.range-annotation { font-size: 0.75rem; color: var(--muted); position: absolute; bottom: -18px; left: 56px; display: none; white-space:nowrap; }
 
 footer { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card); border-top: 1px solid var(--line); padding: 8px 16px; display: flex; flex-wrap:wrap; align-items: center; justify-content: space-between; gap: 8px 12px; box-sizing: border-box; z-index:25; }
 .footer-item { color: var(--muted); font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
