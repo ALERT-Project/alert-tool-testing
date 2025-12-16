@@ -1,6 +1,6 @@
 {
 type: uploaded file
-fileName: script (3).js
+fileName: script (4).js
 fullContent:
 /* ===========================
    1. Utilities & Configuration
@@ -177,23 +177,23 @@ function initGhostSpans() {
 
 function setGhostValue(inputId, value) {
     const el = $(inputId);
-    if (!el) return;
+    if (!el || !value) return;
     
     // If it's part of a blood-item or vitals group with .ghost-val
     let wrapper = el.closest('.blood-item') || el.closest('.col-3') || el.closest('.col-4');
-    if (!wrapper) return;
-    
-    const ghost = wrapper.querySelector('.ghost-val');
-    if (ghost) {
-        ghost.textContent = `Prev: ${value}`;
-        // Ensure styling matches request
-        ghost.style.color = "var(--blue-hint)"; 
-        ghost.style.fontWeight = "700";
-    } else {
-        // Fallback for fields without dedicated ghost span (like text inputs)
-        el.placeholder = `Prev: ${value}`;
-        el.classList.add('scraped-placeholder');
+    if (wrapper) {
+        const ghost = wrapper.querySelector('.ghost-val');
+        if (ghost) {
+            ghost.textContent = `Prev: ${value}`;
+            ghost.style.color = "var(--blue-hint)"; 
+            ghost.style.fontWeight = "700";
+            return;
+        }
     }
+    
+    // Fallback for fields without dedicated ghost span (like text inputs)
+    el.placeholder = `Prev: ${value}`;
+    el.classList.add('scraped-placeholder');
 }
 
 // === THE DMR PARSER ===
@@ -201,11 +201,7 @@ function processDmrNote() {
     const text = $('dmrPasteInput').value;
     if(!text || text.length < 10) return;
 
-    if(!text.includes("Patient:") && !text.includes("ALERT Nursing")) {
-        $('pasteError').textContent = "Format not recognized";
-        $('pasteError').style.display = 'block';
-        return;
-    }
+    // Remove strict validation to allow non-standard notes
     $('pasteError').style.display = 'none';
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
@@ -223,12 +219,24 @@ function processDmrNote() {
     const mrn = extract(/URN:.*?(\d{3,})/);
     const age = extract(/Age:\s*(\d+)/); 
     const wardMatch = extract(/Location:\s*(.*?)\s*\|?/); 
-    const admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
-    const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/);
-    const icuLos = extract(/ICU LOS:\s*(\d+)/);
+    
+    // Admission Reason: Try standard label, then "Admitted post", then "Diagnosis"
+    let admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
+    if (!admReason) admReason = extract(/Admitted post\s*(.*?)\n/i);
+    if (!admReason) admReason = extract(/Diagnosis:\s*(.*?)\n/i);
+    
+    const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/) || extract(/Discharged from ICU on\s*(\d{2}\/\d{2}\/\d{2,4})/);
+    const icuLos = extract(/ICU LOS:\s*(\d+)/) || extract(/LOS\s*(\d+)\s*day/i);
     const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|\n[A-Z])/);
     const allergies = extract(/Allergies:\s*(.*?)\n/);
-    const goc = extract(/GOC:\s*(.*?)\n/);
+    
+    // GOC: Try standard, then "Not for CPR", then "NFR"
+    let goc = extract(/GOC:\s*(.*?)\n/);
+    if(!goc) {
+        const nfrMatch = text.match(/(Not for CPR.*|NFR.*|For METS.*)/i);
+        if(nfrMatch) goc = nfrMatch[1].trim();
+    }
+
     const prevCat = extract(/ALERT Nursing Review Category - (CAT \d|CAT \d [A-Z]+)/);
 
     setScraped('ptName', name);
@@ -236,11 +244,9 @@ function processDmrNote() {
     if(age) setScraped('ptAge', age);
     
     if(wardMatch) {
-         // Logic to split "3A 12" into Ward and Bed
          const parts = wardMatch.split(' ');
          if(parts.length > 0) {
              const wardCode = parts[0];
-             // Try to select in dropdown
              const select = $('ptWard');
              let found = false;
              for(let i=0; i<select.options.length; i++){
@@ -265,8 +271,12 @@ function processDmrNote() {
     setScraped('icuLos', icuLos);
     
     if(stepdownDate) {
-        const [d,m,y] = stepdownDate.split('/');
-        setScraped('stepdownDate', `${y}-${m}-${d}`);
+        const parts = stepdownDate.split('/');
+        if(parts.length === 3) {
+             let [d,m,y] = parts;
+             if(y.length === 2) y = "20" + y;
+             setScraped('stepdownDate', `${y}-${m}-${d}`);
+        }
     }
     
     if(pmh) $('pmh_note').value = pmh.replace(/\n/g, ', ');
@@ -279,13 +289,13 @@ function processDmrNote() {
         catDiv.style.display = 'block';
     }
 
-    // 2. Previous Vitals (A-E)
-    // Extract from Summary block
-    const rr = extract(/B:.*?RR\s*(\d+)/); 
-    const spo2 = extract(/B:.*?SpO2\s*(\d+)/); 
-    const hr = extract(/C:.*?HR\s*(\d+)/); 
-    const bp = extract(/C:.*?NIBP\s*(\d+\/\d+)/); 
-    const temp = extract(/E:.*?Temp\s*([\d.]+)/); 
+    // 2. Previous Vitals (A-E) - Robust Parsing
+    // Look for tool format first, then generic regex anywhere
+    let rr = extract(/B:.*?RR\s*(\d+(?:-\d+)?)/) || extract(/RR\s*(\d+(?:-\d+)?)/i);
+    let spo2 = extract(/B:.*?SpO2\s*(\d+)/) || extract(/SpO2\s*(\d+)/i);
+    let hr = extract(/C:.*?HR\s*(\d+)/) || extract(/HR\s*(\d+)/i); 
+    let bp = extract(/C:.*?NIBP\s*(\d+\/\d+)/) || extract(/BP\s*(\d+\/\d+)/i);
+    let temp = extract(/E:.*?Temp\s*([\d.]+)/) || extract(/T\s*(\d+\.?\d*)/i);
     
     if(rr) setGhostValue('b_rr', rr);
     if(spo2) setGhostValue('b_spo2', spo2);
@@ -293,86 +303,128 @@ function processDmrNote() {
     if(bp) setGhostValue('c_nibp', bp);
     if(temp) setGhostValue('e_temp', temp);
 
-    // Text fields (Airway, Mobility) - Populate and Blue
+    // Text fields
     const airway = extract(/A:\s*(.*?)(?=\n|B:)/);
-    if(airway && airway !== 'Patent') setScraped('airway_a', airway);
+    if(airway && !airway.toLowerCase().includes('patent')) setScraped('airway_a', airway);
     
     const mobility = extract(/Mobility\/MSK:\s*(.*?)\n/);
     if(mobility) setScraped('ae_mobility', mobility);
 
-    // 3. Previous Bloods
-    const bloodsBlock = extract(/Bloods:\s*(.*?)\n/);
-    if(bloodsBlock) {
-        const map = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
-        
-        const cleanBloods = bloodsBlock.replace(/\(.*?\)/g, ''); 
-        const items = cleanBloods.split(',');
-        
-        items.forEach(item => {
-            const parts = item.trim().split(' ');
-            if(parts.length >= 2) {
-                const label = parts[0];
-                const val = parts[1];
-                const inputId = map[label];
-                if(inputId) setGhostValue(inputId, val);
-            }
-        });
+    // 3. Previous Bloods - Robust Parsing
+    // Match "Hb 86" or "Hb: 86" or "lact 1.8"
+    // We scan the whole text for these patterns
+    const bloodMap = { 
+        'Lac': /Lac(?:tate)?\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Hb': /Hb\s*[:]?\s*(\d+)/i, 
+        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 
+        'CRP': /CRP\s*[:]?\s*(\d+)/i, 
+        'Cr': /Cr\s*[:]?\s*(\d+)/i, 
+        'K': /K\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Na': /Na\s*[:]?\s*(\d+)/i, 
+        'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Plts': /Plts\s*[:]?\s*(\d+)/i, 
+        'Alb': /Alb\s*[:]?\s*(\d+)/i, 
+        'Neut': /Neut\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Lymph': /Lymph\s*[:]?\s*(\d+\.?\d*)/i, 
+        'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i, 
+        'eGFR': /eGFR\s*[:]?\s*(\d+)/i 
+    };
+
+    const inputMap = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
+
+    for(const [label, regex] of Object.entries(bloodMap)) {
+        const m = text.match(regex);
+        if(m && m[1]) {
+            const inputId = inputMap[label];
+            if(inputId) setGhostValue(inputId, m[1]);
+        }
     }
 
     // 4. Historical Risk Parsing
     document.querySelectorAll('.prev-risk-text').forEach(el => { el.textContent = ''; el.style.display='none'; });
     
+    // Try standard risk section
+    let riskLines = [];
     const riskSection = text.match(/IDENTIFIED RISK FACTORS:\n([\s\S]*?)(?=\n\n|\nPLAN:|$)/);
     if(riskSection) {
-        const riskLines = riskSection[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('-'));
-        
-        riskLines.forEach(line => {
-            const cleanLine = line.replace(/^-\s*/, '').replace(/^\[.*?\]\s*/, ''); 
-            const displayTx = `Last review: ${cleanLine}`;
-            
-            if(cleanLine.match(/Renal/i)) showPrevRisk('prev_renal_info', displayTx);
-            else if(cleanLine.match(/Respiratory|Airway|Dyspnea/i)) showPrevRisk('prev_resp_info', displayTx);
-            else if(cleanLine.match(/Neuro/i)) showPrevRisk('prev_neuro_info', displayTx);
-            else if(cleanLine.match(/Infection|Sepsis|WCC|CRP/i)) showPrevRisk('prev_inf_info', displayTx);
-            else if(cleanLine.match(/Vasopressor|Shock/i)) showPrevRisk('prev_pressor_info', displayTx);
-            else if(cleanLine.match(/Hb|Anemia/i)) showPrevRisk('prev_hb_info', displayTx);
-            else if(cleanLine.match(/UOP/i)) showPrevRisk('uop_note_wrapper', displayTx); // Special case
-            else if(cleanLine.match(/Electrolyte/i)) showPrevRisk('prev_elec_info', displayTx);
-            else if(cleanLine.match(/Immobility/i)) showPrevRisk('prev_immob_info', displayTx);
-            else if(cleanLine.match(/ADDS/i)) showPrevRisk('prev_adds_info', displayTx);
-            else if(cleanLine.match(/Lactate/i)) showPrevRisk('prev_lac_info', displayTx);
-            else if(cleanLine.match(/Comorbid/i)) showPrevRisk('prev_comorb_info', displayTx);
-            else if(cleanLine.match(/Wean/i)) showPrevRisk('prev_wean_info', displayTx);
-            else if(cleanLine.match(/Intubat/i)) showPrevRisk('prev_tubed_info', displayTx);
-            else if(cleanLine.match(/Historical O2/i)) showPrevRisk('prev_hist_o2_info', displayTx);
-        });
+        riskLines = riskSection[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('-'));
+    } else {
+        // Fallback: Check Plan or other notes for keywords if standard section missing
+        // This is harder to do safely without false positives, so we rely on standard section for now.
     }
+    
+    riskLines.forEach(line => {
+        const cleanLine = line.replace(/^-\s*/, '').replace(/^\[.*?\]\s*/, ''); 
+        const displayTx = `Last review: ${cleanLine}`;
+        
+        if(cleanLine.match(/Renal/i)) showPrevRisk('prev_renal_info', displayTx);
+        else if(cleanLine.match(/Respiratory|Airway|Dyspnea/i)) showPrevRisk('prev_resp_info', displayTx);
+        else if(cleanLine.match(/Neuro/i)) showPrevRisk('prev_neuro_info', displayTx);
+        else if(cleanLine.match(/Infection|Sepsis|WCC|CRP/i)) showPrevRisk('prev_inf_info', displayTx);
+        else if(cleanLine.match(/Vasopressor|Shock/i)) showPrevRisk('prev_pressor_info', displayTx);
+        else if(cleanLine.match(/Hb|Anemia/i)) showPrevRisk('prev_hb_info', displayTx);
+        else if(cleanLine.match(/UOP/i)) showPrevRisk('uop_note_wrapper', displayTx); // Special case
+        else if(cleanLine.match(/Electrolyte/i)) showPrevRisk('prev_elec_info', displayTx);
+        else if(cleanLine.match(/Immobility/i)) showPrevRisk('prev_immob_info', displayTx);
+        else if(cleanLine.match(/ADDS/i)) showPrevRisk('prev_adds_info', displayTx);
+        else if(cleanLine.match(/Lactate/i)) showPrevRisk('prev_lac_info', displayTx);
+        else if(cleanLine.match(/Comorbid/i)) showPrevRisk('prev_comorb_info', displayTx);
+        else if(cleanLine.match(/Wean/i)) showPrevRisk('prev_wean_info', displayTx);
+        else if(cleanLine.match(/Intubat/i)) showPrevRisk('prev_tubed_info', displayTx);
+        else if(cleanLine.match(/Historical O2/i)) showPrevRisk('prev_hist_o2_info', displayTx);
+    });
 
     // 5. Devices (Ghost)
     $('devices-container').innerHTML = '';
-    const deviceSection = text.match(/DEVICES:\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/);
+    
+    // Strategy: Look for "DEVICES:" block, otherwise look for keywords globally
+    let deviceText = '';
+    const deviceSection = text.match(/DEVICES:\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i) || text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i);
+    
     if(deviceSection) {
+        // Standard block parsing
         const lines = deviceSection[1].split('\n');
         lines.forEach(line => {
             line = line.trim();
-            if(line.startsWith('-')) {
-                const raw = line.substring(1).trim();
-                let type = raw; 
-                let details = '';
-                const parenIndex = raw.indexOf('(');
-                if(parenIndex > -1) {
+            if(line) {
+                 // Remove list markers if present
+                 const raw = line.replace(/^- /, '').trim();
+                 // Determine type
+                 let type = raw; 
+                 let details = '';
+                 
+                 // Check for "Type (Details)" format
+                 const parenIndex = raw.indexOf('(');
+                 if(parenIndex > -1) {
                     type = raw.substring(0, parenIndex).trim();
                     details = raw.substring(parenIndex+1, raw.lastIndexOf(')')).trim();
-                }
-                const knownType = deviceTypes.find(t => type.toLowerCase().includes(t.toLowerCase()));
-                createDeviceEntry(knownType || 'Other Device', details || raw, true);
+                 } else {
+                    // Check for "Type - Details" format
+                    const dashIndex = raw.indexOf('-');
+                    if(dashIndex > 0) { // >0 to avoid leading dashes
+                        type = raw.substring(0, dashIndex).trim();
+                        details = raw.substring(dashIndex+1).trim();
+                    }
+                 }
+                 
+                 const knownType = deviceTypes.find(t => type.toLowerCase().includes(t.toLowerCase()));
+                 // If line is just "CVL" or "PIVC x2"
+                 if (!knownType) {
+                     // Check if the raw string matches a known type directly
+                     const directMatch = deviceTypes.find(t => raw.toLowerCase().includes(t.toLowerCase()));
+                     if(directMatch) createDeviceEntry(directMatch, raw, true);
+                     else createDeviceEntry('Other Device', raw, true);
+                 } else {
+                     createDeviceEntry(knownType, details || raw, true);
+                 }
             }
         });
     }
 
     // 6. Force Open Bloods
     const bloodsDetails = document.querySelector('details[data-accordion-id="bloods"]');
-    if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); // Fix: Ensure Bloods accordion ID logic matches
+    if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); 
 
     $('dmrPasteWrapper').style.display = 'none'; 
     showToast("Note processed! Scraped data in Blue.");
@@ -617,8 +669,27 @@ function initialize() {
     if (!confirm('Are you sure you want to clear all data for this patient?')) return;
     pushUndo(getState());
     
-    // Reset Logic
+    // 1. Reset standard inputs
     staticInputs.forEach(id=>{ const el=$(id); if(el) { el.value=''; el.classList.remove('scraped-data', 'scraped-placeholder'); if(el.placeholder.startsWith('Prev:')) el.placeholder=''; } });
+    
+    // 2. Clear DMR Paste box
+    const dmrBox = $('dmrPasteInput');
+    if(dmrBox) dmrBox.value = '';
+
+    // 3. Clear Scraped/Ghost/Previous Classes & Text
+    document.querySelectorAll('.scraped-data').forEach(el => {
+        el.classList.remove('scraped-data');
+        el.value = '';
+    });
+    document.querySelectorAll('.scraped-placeholder').forEach(el => {
+        el.classList.remove('scraped-placeholder');
+        el.placeholder = '';
+    });
+    document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
+    document.querySelectorAll('.prev-risk-text').forEach(el => { el.textContent = ''; el.style.display='none'; });
+    $('prevCategory').style.display = 'none';
+
+    // 4. Standard UI Resets
     document.querySelectorAll('.segmented-group').forEach(group => {
         group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     });
@@ -663,10 +734,6 @@ function initialize() {
     $('override_reason_box').style.display = 'none';
     $('override_red').classList.remove('active');
     $('override_amber').classList.remove('active');
-    
-    document.querySelectorAll('.ghost-val').forEach(s => s.textContent='');
-    document.querySelectorAll('.prev-risk-text').forEach(s => { s.textContent=''; s.style.display='none'; });
-    $('prevCategory').style.display = 'none';
     
     computeAll();
     saveState(true);
