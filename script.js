@@ -1,6 +1,6 @@
 {
 type: uploaded file
-fileName: script (4).js
+fileName: script.js
 fullContent:
 /* ===========================
    1. Utilities & Configuration
