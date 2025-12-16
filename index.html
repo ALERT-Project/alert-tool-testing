@@ -5,14 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>ALERT Nursing Risk Assessment Tool v4.3</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header role="banner">
   <h1><span class="logo-em">!</span> ALERT <span class="logo-em">!</span> <br> Nursing Risk Assessment Tool</h1>
   <div class="header-controls">
     <div style="display:flex; gap:8px;">
-        <button class="btn small" style="background:var(--accent); color:#fff; border-color:var(--accent);" id="followUpBtn">Start Follow-up</button>
         <button class="btn small" id="darkToggle" aria-pressed="false">Dark mode</button>
         <button class="btn danger small" id="clearDataBtnTop">Clear Data / Next Patient</button>
     </div>
@@ -35,6 +34,7 @@
         <div style="display:flex; gap:8px; padding-top:6px;">
           <label style="font-weight:500"><input type="radio" name="reviewType" value="pre"> Pre-Stepdown</label>
           <label style="font-weight:500"><input type="radio" name="reviewType" value="post" checked> Post-Stepdown</label>
+          <label style="font-weight:500; color:var(--accent);"><input type="radio" name="reviewType" value="followup"> Follow-up</label>
         </div>
       </div>
       <div class="col-6"><label for="ptName">Patient Initials</label><input id="ptName" type="text" autocomplete="off" /></div>
@@ -69,6 +69,17 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="card" id="dmrPasteCard" style="display:none; border: 2px dashed var(--accent); background: var(--bg);">
+    <div class="section-title" style="color:var(--accent);">📋 Follow-up: Import Previous Note</div>
+    <label>Paste the previous ALERT Summary text here to auto-fill demographics and reference values.</label>
+    <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:100px; font-family:monospace; font-size:0.9rem;"></textarea>
+    <div style="display:flex; justify-content:space-between; margin-top:12px;">
+        <button class="btn" id="cancelPasteBtn">Cancel / Manual Entry</button>
+        <button class="btn primary" id="processPasteBtn">Process Note</button>
+    </div>
+    <div id="pasteError" style="color:var(--red); font-size:0.9rem; margin-top:8px; display:none; font-weight:600;">Could not recognize note format. Please enter manually.</div>
   </div>
 
   <div class="card">
@@ -435,8 +446,8 @@
                 <div class="trend-buttons" id="c_hr_trend"></div>
             </div>
             <div class="quick-select-container">
-               <button type="button" class="btn small quick-select" onclick="$('c_hr_rhythm').value='Regular';$('c_hr_rhythm').dispatchEvent(new Event('input'));">Regular</button>
-               <button type="button" class="btn small quick-select" onclick="$('c_hr_rhythm').value='Irregular';$('c_hr_rhythm').dispatchEvent(new Event('input'));">Irregular</button>
+               <button type="button" class="btn small quick-select" data-target="c_hr_rhythm" data-value="Regular">Regular</button>
+               <button type="button" class="btn small quick-select" data-target="c_hr_rhythm" data-value="Irregular">Irregular</button>
             </div>
             <input id="c_hr_rhythm" type="text" placeholder="Rhythm..." style="margin-top:4px;" />
         </div>
