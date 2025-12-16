@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: script.js
-fullContent:
 /* ===========================
    1. Utilities & Configuration
    =========================== */
@@ -1701,5 +1697,3 @@ function openRedcapAccelerator() {
 document.addEventListener('DOMContentLoaded', ()=> {
   initialize();
 });
-
-}
