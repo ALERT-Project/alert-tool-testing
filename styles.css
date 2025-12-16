@@ -124,10 +124,10 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 24px 0 18
 .flag-red { box-shadow: 0 0 0 2px var(--red); }
 .flag-amber { box-shadow: 0 0 0 2px var(--amber); }
 
-/* --- NEW STYLES FOR FOLLOW UP & GHOST VALUES --- */
+/* --- Follow-up & Ghost Values --- */
 .ghost-val {
     position: absolute;
-    bottom: -18px; /* Sit below the input */
+    bottom: -18px;
     left: 4px;
     font-size: 0.75rem;
     color: var(--blue-hint);
