@@ -5,9 +5,9 @@ const $ = id => document.getElementById(id);
 const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
-const STORAGE_KEY = 'alertNursingToolData_v4.3'; 
-const ACCORDION_KEY = 'alertNursingToolAccordions_v4.3';
-const UNDO_KEY = 'alertNursingToolUndo_v4.3';
+const STORAGE_KEY = 'alertNursingToolData_v4.4'; 
+const ACCORDION_KEY = 'alertNursingToolAccordions_v4.4';
+const UNDO_KEY = 'alertNursingToolUndo_v4.4';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -167,60 +167,75 @@ function processDmrNote() {
     if(!text || text.length < 10) return;
 
     if(!text.includes("Patient:") && !text.includes("ALERT Nursing")) {
+        $('pasteError').textContent = "Format not recognized";
         $('pasteError').style.display = 'block';
         return;
     }
     $('pasteError').style.display = 'none';
 
-    const volatileInputs = [
-        'adds','lactate','hb','wcc','crp','neut','lymph', 
-        'airway_a','b_rr','b_spo2','b_wob',
-        'c_hr','c_nibp','c_cr','c_perf',
-        'd_alert','d_pain','e_temp','e_bsl','e_uop',
-        'atoe_adds', 'mods_score'
-    ];
-    volatileInputs.forEach(id => { if($(id)) $(id).value = ''; });
-    
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
     
+    // 1. Demographics
     const name = extract(/Patient:\s*(.*?)\s*\|/);
     const mrn = extract(/URN:.*?(\d{3,})/);
     const wardMatch = extract(/Location:\s*(.*?)\s*\|?/); 
     const admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
     const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/);
     const icuLos = extract(/ICU LOS:\s*(\d+)/);
+    const age = extract(/Age:\s*(\d+)/); // New Regex for Age
     const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|\n[A-Z])/);
     const allergies = extract(/Allergies:\s*(.*?)\n/);
     const goc = extract(/GOC:\s*(.*?)\n/);
 
-    if(name) $('ptName').value = name;
-    if(mrn) $('ptMrn').value = mrn.slice(-3);
+    // Helper to set blue class
+    const setScraped = (id, val) => {
+        const el = $(id);
+        if(el && val) { 
+            el.value = val; 
+            el.classList.add('scraped-data'); // Add blue class
+            // Remove class on manual edit
+            el.addEventListener('input', () => el.classList.remove('scraped-data'), {once:true});
+        }
+    };
+
+    setScraped('ptName', name);
+    if(mrn) setScraped('ptMrn', mrn.slice(-3));
+    if(age) setScraped('ptAge', age);
+    
     if(wardMatch) {
          const parts = wardMatch.split(' ');
-         if(parts.length > 0) $('ptWard').value = parts[0]; 
-         if(parts.length > 1) $('ptBed').value = parts[1];
-         $('ptWard').dispatchEvent(new Event('change'));
+         if(parts.length > 0) { 
+             $('ptWard').value = parts[0]; 
+             $('ptWard').classList.add('scraped-data');
+             $('ptWard').addEventListener('change', () => $('ptWard').classList.remove('scraped-data'), {once:true});
+         }
+         if(parts.length > 1) setScraped('ptBed', parts[1]);
     }
-    if(admReason) $('ptAdmissionReason').value = admReason;
-    if(icuLos) $('icuLos').value = icuLos;
+    
+    setScraped('ptAdmissionReason', admReason);
+    setScraped('icuLos', icuLos);
+    
     if(stepdownDate) {
         const [d,m,y] = stepdownDate.split('/');
         $('stepdownDate').value = `${y}-${m}-${d}`;
     }
+    
     if(pmh) $('pmh_note').value = pmh.replace(/\n/g, ', ');
     if(allergies) $('allergies_note').value = allergies;
     if(goc) $('goc_note').value = goc;
 
+    // 2. Previous Vitals (Ghost Values - Now Blue)
     const rr = extract(/RR\s*(\d+)/); 
     const spo2 = extract(/SpO2\s*(\d+)/); 
     const hr = extract(/HR\s*(\d+)/); 
     const bp = extract(/NIBP\s*(\d+\/\d+)/); 
     
-    if(rr) $('b_rr').placeholder = `Prev: ${rr}`;
-    if(spo2) $('b_spo2').placeholder = `Prev: ${spo2}`;
-    if(hr) $('c_hr').placeholder = `Prev: ${hr}`;
-    if(bp) $('c_nibp').placeholder = `Prev: ${bp}`;
+    if(rr) { $('b_rr').placeholder = `Prev: ${rr}`; $('b_rr').classList.add('scraped-placeholder'); }
+    if(spo2) { $('b_spo2').placeholder = `Prev: ${spo2}`; $('b_spo2').classList.add('scraped-placeholder'); }
+    if(hr) { $('c_hr').placeholder = `Prev: ${hr}`; $('c_hr').classList.add('scraped-placeholder'); }
+    if(bp) { $('c_nibp').placeholder = `Prev: ${bp}`; $('c_nibp').classList.add('scraped-placeholder'); }
 
+    // 3. Previous Bloods
     const bloodsBlock = extract(/Bloods:\s*(.*?)\n/);
     if(bloodsBlock) {
         const map = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
@@ -237,12 +252,45 @@ function processDmrNote() {
                 if(inputId && $(inputId)) {
                     const wrapper = $(inputId).parentElement;
                     const ghost = wrapper.querySelector('.ghost-val');
-                    if(ghost) ghost.textContent = `Prev: ${val}`;
+                    if(ghost) {
+                        ghost.textContent = `Prev: ${val}`;
+                        ghost.style.color = "#1d4ed8"; // Bold Blue
+                        ghost.style.fontWeight = "600";
+                    }
                 }
             }
         });
     }
 
+    // 4. Historical Risk Parsing
+    // Reset previous historical risks
+    document.querySelectorAll('.prev-risk-text').forEach(el => el.textContent = '');
+    
+    const riskSection = text.match(/IDENTIFIED RISK FACTORS:\n([\s\S]*?)(?=\n\n|\nPLAN:|$)/);
+    if(riskSection) {
+        const riskLines = riskSection[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('-'));
+        
+        riskLines.forEach(line => {
+            const cleanLine = line.replace(/^-\s*/, '').replace(/^\[.*?\]\s*/, ''); // Remove dash and [CAT X] tag
+            const fullText = cleanLine; // Keep full text including parens e.g. "Renal Concern (Cr rising)"
+            
+            // Keyword Mapping
+            if(cleanLine.match(/Renal/i)) showPrevRisk('prev_renal_info', fullText, 'group_neuro_renal');
+            else if(cleanLine.match(/Respiratory|Airway|Dyspnea/i)) showPrevRisk('prev_resp_info', fullText, 'group_resp');
+            else if(cleanLine.match(/Neuro/i)) showPrevRisk('prev_neuro_info', fullText, 'group_neuro_renal');
+            else if(cleanLine.match(/Infection|Sepsis|WCC|CRP/i)) showPrevRisk('prev_inf_info', fullText, 'group_circ');
+            else if(cleanLine.match(/Vasopressor|Shock/i)) showPrevRisk('prev_pressor_info', fullText, 'group_circ');
+            else if(cleanLine.match(/Hb|Anemia/i)) showPrevRisk('prev_hb_info', fullText, 'group_circ');
+            else if(cleanLine.match(/UOP/i)) showPrevRisk('prev_uop_info', fullText, 'group_neuro_renal'); // UOP specific
+            else if(cleanLine.match(/Electrolyte/i)) showPrevRisk('prev_elec_info', fullText, 'group_neuro_renal');
+            else if(cleanLine.match(/Immobility/i)) showPrevRisk('prev_immob_info', fullText, 'group_neuro_renal');
+            else if(cleanLine.match(/ADDS/i)) showPrevRisk('prev_adds_info', fullText, null);
+            else if(cleanLine.match(/Lactate/i)) showPrevRisk('prev_lac_info', fullText, 'group_circ');
+            else if(cleanLine.match(/Comorbid/i)) showPrevRisk('prev_comorb_info', fullText, 'group_neuro_renal');
+        });
+    }
+
+    // 5. Devices
     $('devices-container').innerHTML = '';
     const deviceSection = text.match(/DEVICES:\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/);
     if(deviceSection) {
@@ -268,9 +316,22 @@ function processDmrNote() {
         });
     }
 
-    $('dmrPasteCard').style.display = 'none';
-    showToast("Note processed! Please confirm devices and enter today's vitals.");
+    $('dmrPasteWrapper').style.display = 'none'; // Auto-hide after process
+    showToast("Note processed! Data scraped in Blue.");
     computeAllAndSave();
+}
+
+function showPrevRisk(elementId, text, groupId) {
+    const el = $(elementId);
+    if(el) {
+        el.textContent = `⚠ ${text}`; // Full text display
+        el.style.display = 'block';
+    }
+    // Auto-expand relevant accordion if in Follow-up mode
+    if(groupId) {
+        const details = $(groupId);
+        if(details) details.setAttribute('open', 'true');
+    }
 }
 
 
@@ -437,11 +498,7 @@ function restoreState(state) {
     if (radioEl) { 
         radioEl.checked = true; 
         updateWardOptions();
-        // Force DMR show if followup
-        if(state['reviewType'] === 'followup') {
-             const dmrCard = $('dmrPasteCard');
-             if(dmrCard) dmrCard.style.display = 'block';
-        }
+        updateLayoutMode(state['reviewType']);
     }
   }
   
@@ -502,14 +559,13 @@ function restoreState(state) {
    5. Interactivity & Init
    =========================== */
 function initialize() {
-  // 1. ATTACH CRITICAL BUTTONS FIRST (So they work even if Restore crashes)
   
   const clearDataAction = () => {
     if (!confirm('Are you sure you want to clear all data for this patient?')) return;
     pushUndo(getState());
     
     // Reset Logic
-    staticInputs.forEach(id=>{ const el=$(id); if(el) el.value=''; });
+    staticInputs.forEach(id=>{ const el=$(id); if(el) { el.value=''; el.classList.remove('scraped-data', 'scraped-placeholder'); if(el.placeholder.startsWith('Prev:')) el.placeholder=''; } });
     document.querySelectorAll('.segmented-group').forEach(group => {
         group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     });
@@ -531,8 +587,11 @@ function initialize() {
     document.querySelectorAll('.trend-buttons .trend-btn').forEach(btn => btn.classList.remove('active'));
     $('devices-container').innerHTML = '';
     
-    document.querySelector('input[name="reviewType"][value="post"]').checked = true;
-    $('dmrPasteCard').style.display = 'none';
+    // Reset review type to default Post
+    const postRadio = document.querySelector('input[name="reviewType"][value="post"]');
+    if(postRadio) postRadio.checked = true;
+    updateLayoutMode('post');
+    
     updateWardOptions();
     
     $('chk_medical_rounding').checked = false;
@@ -553,9 +612,7 @@ function initialize() {
     $('override_amber').classList.remove('active');
     
     document.querySelectorAll('.ghost-val').forEach(s => s.textContent='');
-    document.querySelectorAll('.input-with-trend input').forEach(i => i.placeholder='');
-    const prList = $('prevRiskList'); if(prList) prList.innerHTML='';
-    const prCont = $('prevRiskContainer'); if(prCont) prCont.style.display='none';
+    document.querySelectorAll('.prev-risk-text').forEach(s => { s.textContent=''; s.style.display='none'; });
     
     computeAll();
     saveState(true);
@@ -569,12 +626,6 @@ function initialize() {
   if($('clearDataBtnBottom')) $('clearDataBtnBottom').addEventListener('click', clearDataAction);
 
   $('processPasteBtn').addEventListener('click', processDmrNote);
-  $('cancelPasteBtn').addEventListener('click', () => {
-      $('dmrPasteCard').style.display = 'none';
-      $('pasteError').style.display = 'none';
-      $('dmrPasteInput').value = '';
-      // Reset radio to post if cancelled? Optional.
-  });
   
   // 2. Setup standard interactions
   updateLastSaved();
@@ -696,15 +747,7 @@ function initialize() {
   document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => {
       updateWardOptions();
       toggleInfusionsBox();
-      
-      // DMR Paste Toggle
-      if(r.value === 'followup') {
-          $('dmrPasteCard').style.display = 'block';
-          $('dmrPasteInput').focus();
-      } else {
-          $('dmrPasteCard').style.display = 'none';
-      }
-      
+      updateLayoutMode(r.value);
       debouncedComputeAndSave();
   }));
 
@@ -816,6 +859,26 @@ function initialize() {
 /* ===========================
    6. UX Logic & Event Handlers
    =========================== */
+function updateLayoutMode(mode) {
+    const isFollowUp = (mode === 'followup');
+    const pasteWrapper = $('dmrPasteWrapper');
+    const riskSections = document.querySelectorAll('details.risk-section');
+
+    if(isFollowUp) {
+        pasteWrapper.style.display = 'block';
+        // Collapse accordions by default in follow-up mode
+        riskSections.forEach(d => {
+            if(!d.hasAttribute('user-interacted')) { // Only collapse if user hasn't messed with it
+                d.removeAttribute('open');
+            }
+        });
+    } else {
+        pasteWrapper.style.display = 'none';
+        // Expand accordions in other modes
+        riskSections.forEach(d => d.setAttribute('open', 'true'));
+    }
+}
+
 function handleSegmentClick(id, value) {
     const noteWrapper = $(id + '_note_wrapper');
     if(noteWrapper) {
@@ -1276,6 +1339,7 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   const ptDetails = [];
   if (s.ptName) ptDetails.push(`Patient: ${s.ptName}`);
   if (s.ptMrn) ptDetails.push(`URN: ...${s.ptMrn}`);
+  if (s.ptAge) ptDetails.push(`Age: ${s.ptAge}`); // Added Age
   if (location) ptDetails.push(`Location: ${location}`);
   if (ptDetails.length) headerLines.push(ptDetails.join(' | '));
   
@@ -1416,19 +1480,10 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
   if (contextLines.length) lines.push('', ...contextLines);
   
-  const prevRiskList = document.getElementById('prevRiskList');
-  if (prevRiskList && prevRiskList.children.length > 0) {
-      const unresolved = [];
-      const resolved = [];
-      prevRiskList.querySelectorAll('.prev-risk-item').forEach(item => {
-          const text = item.querySelector('span').textContent;
-          const isChecked = item.querySelector('input').checked;
-          if(isChecked) resolved.push(text);
-          else unresolved.push(text);
-      });
-      if(resolved.length) lines.push('', 'RESOLVED ISSUES:', ...resolved.map(r => `- ${r} (Resolved)`));
-      if(unresolved.length) lines.push('', 'PERSISTENT PREVIOUS CONCERNS:', ...unresolved.map(u => `- ${u}`));
-  }
+  // No longer needed to show Prev Risk in summary as it's for user reference,
+  // but if you want to keep unresolved risks:
+  // (Left as per previous version logic, currently disabled in display to reduce clutter
+  // unless specifically asked for).
   
   const allFlags = [...red, ...amber];
   if (allFlags.length) lines.push('', 'IDENTIFIED RISK FACTORS:', ...allFlags.map(f=>'- '+f));
