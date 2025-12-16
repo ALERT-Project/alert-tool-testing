@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: style (2).css
+fullContent:
 :root{
   --bg:#f0f9f9; --card:#ffffff; --ink:#111827; --muted:#4b5563; --accent:#007a7a;
   --red:#ef4444; --amber:#f59e0b; --green:#10b981; --line:#d1e3e3; --input-bg:#f8fbfb;
@@ -194,6 +198,9 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
 
 /* --- Devices --- */
 .device-entry { background: var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; }
+.device-entry[style*="dashed"] { border-color: var(--blue-hint) !important; background: rgba(37, 99, 235, 0.05) !important; }
+.device-entry[style*="dashed"] label { color: var(--blue-hint) !important; }
+
 .device-entry textarea { width:100%; min-height:40px; font-size:0.95rem; background:var(--input-bg); }
 .remove-entry { background: transparent; border:1px solid rgba(239,68,68,0.12); color:var(--red); border-radius:6px; padding:6px; cursor:pointer; text-align:center; font-weight:700; font-size:0.8rem;}
 
