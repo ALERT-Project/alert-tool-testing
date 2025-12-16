@@ -5,9 +5,9 @@ const $ = id => document.getElementById(id);
 const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
-const STORAGE_KEY = 'alertNursingToolData_v4.2'; // Bumped version
-const ACCORDION_KEY = 'alertNursingToolAccordions_v4.2';
-const UNDO_KEY = 'alertNursingToolUndo_v4.2';
+const STORAGE_KEY = 'alertNursingToolData_v4.3'; 
+const ACCORDION_KEY = 'alertNursingToolAccordions_v4.3';
+const UNDO_KEY = 'alertNursingToolUndo_v4.3';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -17,7 +17,10 @@ const normalRanges = {
   cr_review: { low: 50, high: 98 },
   mg: { low: 0.7, high: 1.1 }, alb: { low: 35, high: 50 },
   lac_review: { low: 0.5, high: 2.0 },
-  phos: { low: 0.8, high: 1.5 }
+  phos: { low: 0.8, high: 1.5 },
+  // NEW RANGES
+  urea: { low: 2.5, high: 7.8 }, 
+  egfr: { low: 60, high: 999 } // Flag if < 60
 };
 
 /* Fields to automatically save/restore */
@@ -31,12 +34,13 @@ const staticInputs = [
   'bl_wcc','bl_crp','bl_neut','bl_lymph',
   'bl_hb','bl_plts','bl_k','bl_na',
   'bl_cr_review','bl_mg','bl_alb','bl_lac_review','bl_phos',
+  'bl_urea', 'bl_egfr', // NEW BLOODS
   'elec_replace_note', 'goc_note', 'allergies_note', 'pics_note', 'context_other_note', 'pmh_note',
   'adds','lactate','hb','wcc','crp','neut','lymph', 'infusions_note',
   'dyspneaConcern_note', 'renalConcern_note', 'uopLow_note', 'neuroConcern_note', 'infectionConcern_note',
   'electrolyteConcern_note',
   'after_hours_note', 'pressors_note', 'hist_o2_note', 'rapid_wean_note', 'immobility_note', 'comorb_other_note',
-  'intubation_details'
+  'intubation_details', 'hb_dropping_note' // NEW HB NOTE
 ];
 
 // Segmented Controls
@@ -54,7 +58,7 @@ const selectInputs = [
     'oxMod','dyspneaConcern','neuroConcern','neuroType','electrolyteConcern','stepdownTime', 
     'tracheType', 'tracheStatus', 'pressorReason', 'intubatedReason'
 ];
-const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'Enteral Tube', 'IDC', 'Pacing Wire', 'Drain', 'Wound', 'Other Device'];
+const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'PICC Line', 'Enteral Tube', 'IDC', 'Pacing Wire', 'Drain', 'Wound', 'Other Device']; // ADDED PICC
 
 /* ===========================
    2. Persistence Helpers
@@ -174,7 +178,6 @@ function getAirwayDeviceText(s) {
     return airwayDeviceText.trim();
 }
 
-// Helper for stacking GCS/AMT text
 function stackText(id, text) {
     const el = $(id);
     let val = el.value;
@@ -185,7 +188,7 @@ function stackText(id, text) {
 }
 
 /* ===========================
-   4. NEW: Ghost Value & Follow-up Logic
+   4. Ghost Value & Follow-up Logic
    =========================== */
 function initGhostSpans() {
     const bloodItems = document.querySelectorAll('.blood-item');
@@ -194,7 +197,6 @@ function initGhostSpans() {
             const span = document.createElement('span');
             span.className = 'ghost-val';
             item.appendChild(span);
-            // Ensure container has spacing for the ghost value
             item.style.marginBottom = "20px"; 
         }
     });
@@ -203,40 +205,35 @@ function initGhostSpans() {
 function triggerFollowUpMode() {
     if(!confirm("Start a Follow-up for this patient? \n\nThis will keep demographics & lines, clear acute vitals, and set yesterday's bloods as a reference hint.")) return;
 
-    // A. Capture "Yesterday's" Data before we clear it
     const currentState = getState();
     
-    // Capture Bloods for Ghosting
+    // Capture Bloods for Ghosting (Added Urea/eGFR)
     const ghostData = {};
-    ['lac_review','hb','wcc','crp','neut','lymph','plts','k','na','mg','phos','cr_review','alb'].forEach(k => {
+    ['lac_review','hb','wcc','crp','neut','lymph','plts','k','na','mg','phos','cr_review','alb','urea','egfr'].forEach(k => {
         ghostData[k] = currentState['bl_'+k];
     });
 
-    // Capture Computed Risks from the UI
     const currentFlags = [];
     document.querySelectorAll('#flagList div').forEach(div => {
         if(div.textContent.includes('No risk')) return;
         currentFlags.push(div.textContent.replace('[CAT 1]', '').replace('[CAT 2]', '').trim());
     });
-
-    // B. Perform the "Partial Clear"
     
-    // Clear Inputs (Vitals, Acute Scores)
+    // Clear Inputs
     const volatileInputs = [
-        'adds','lactate','hb','wcc','crp','neut','lymph', // Top section acute
-        'airway_a','b_rr','b_spo2','b_wob', // A-E Vitals
+        'adds','lactate','hb','wcc','crp','neut','lymph', 
+        'airway_a','b_rr','b_spo2','b_wob',
         'c_hr','c_nibp','c_cr','c_perf',
         'd_alert','d_pain','e_temp','e_bsl','e_uop',
-        'atoe_adds', 'mods_score' // Scores
+        'atoe_adds', 'mods_score'
     ];
     volatileInputs.forEach(id => { if($(id)) $(id).value = ''; });
 
-    // Clear Blood Inputs (But we have the ghost data saved)
-    ['bl_lac_review','bl_hb','bl_wcc','bl_crp','bl_neut','bl_lymph','bl_plts','bl_k','bl_na','bl_mg','bl_phos','bl_cr_review','bl_alb'].forEach(id => {
+    ['bl_lac_review','bl_hb','bl_wcc','bl_crp','bl_neut','bl_lymph','bl_plts','bl_k','bl_na','bl_mg','bl_phos','bl_cr_review','bl_alb','bl_urea','bl_egfr'].forEach(id => {
         if($(id)) $(id).value = '';
     });
 
-    // Reset Acute Toggles/Segments
+    // Reset Segments
     ['hb_dropping','rapid_wean','after_hours','uop','pressors'].forEach(id => {
          const group = $('seg_'+id);
          if(group) {
@@ -245,18 +242,17 @@ function triggerFollowUpMode() {
          }
     });
 
-    // Clear Concern Dropdowns (Respiratory, Neuro, etc)
+    // Clear Concerns
     ['dyspneaConcern','neuroConcern','electrolyteConcern'].forEach(id => {
          const group = $(id);
          if(group) {
             group.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
-            // Default to None to force a check
             const noneBtn = group.querySelector('[data-value="none"]');
             if(noneBtn) noneBtn.click();
          }
     });
 
-    // C. Apply "Ghost Values"
+    // Apply Ghosts
     Object.keys(ghostData).forEach(k => {
         const val = ghostData[k];
         const input = $('bl_'+k);
@@ -267,7 +263,7 @@ function triggerFollowUpMode() {
         }
     });
 
-    // D. Render Previous Risks Checklist
+    // Previous Risks
     const prevContainer = $('prevRiskContainer');
     const prevList = $('prevRiskList');
     
@@ -291,15 +287,14 @@ function triggerFollowUpMode() {
         }
     }
 
-    // Update state calculations
     computeAll();
     saveState();
-    showToast("Follow-up started. Previous bloods shown as hint.");
+    showToast("Follow-up started.");
 }
 
 
 /* ===========================
-   5. State Management (Get/Restore)
+   5. State Management
    =========================== */
 function getState() {
   const state = {};
@@ -309,19 +304,13 @@ function getState() {
     state[id] = el.value;
   }
   
-  // Segmented Controls state
   for (const id of segmentedInputs) {
     const group = $(`seg_${id}`);
     if(!group) continue;
     const active = group.querySelector('.seg-btn.active');
-    if(active) {
-        state[id] = active.dataset.value === "true";
-    } else {
-        state[id] = null;
-    }
+    state[id] = active ? (active.dataset.value === "true") : null;
   }
   
-  // Simple Toggles
   for (const id of toggleInputs) {
     const el = $(`toggle_${id}`);
     state[id] = el ? el.dataset.value === 'true' : false;
@@ -344,7 +333,6 @@ function getState() {
   state['chk_use_mods'] = $('chk_use_mods').checked;
   state['chk_aperients'] = $('chk_aperients').checked;
   
-  // Bowel State
   const bowelBtn = document.querySelector('#panel_ae .quick-select.active');
   state['bowel_mode'] = bowelBtn ? bowelBtn.id : null;
 
@@ -358,15 +346,6 @@ function getState() {
     const activeBtn = group.querySelector('.trend-btn.active');
     state[group.id] = activeBtn ? activeBtn.dataset.value : '';
   });
-  
-  const vitalsTrends = ['b_rr_trend', 'c_hr_trend', 'c_nibp_trend'];
-  vitalsTrends.forEach(id => {
-      const group = $(id);
-      if(group) {
-        const activeBtn = group.querySelector('.trend-btn.active');
-        state[id] = activeBtn ? activeBtn.dataset.value : '';
-      }
-  });
 
   return state;
 }
@@ -379,7 +358,6 @@ function restoreState(state) {
     if (state[id] !== undefined) el.value = state[id];
   }
 
-  // Restore Segmented Controls
   for (const id of segmentedInputs) {
     const group = $(`seg_${id}`);
     if(!group) continue;
@@ -398,7 +376,6 @@ function restoreState(state) {
     }
   }
   
-  // Restore Simple Toggles
   for (const id of toggleInputs) {
     const el = $(`toggle_${id}`);
     if (!el) continue;
@@ -420,10 +397,7 @@ function restoreState(state) {
   
   if (state['reviewType']) {
     const radioEl = document.querySelector(`input[name="reviewType"][value="${state['reviewType']}"]`);
-    if (radioEl) {
-        radioEl.checked = true;
-        updateWardOptions();
-    }
+    if (radioEl) { radioEl.checked = true; updateWardOptions(); }
   }
   
   if (state['clinicianRole']) {
@@ -440,16 +414,11 @@ function restoreState(state) {
       $('mods_inputs').style.display = state['chk_use_mods'] ? 'block' : 'none';
   }
   
-  // Restore Bowels
   if (state['bowel_mode']) {
       const btn = $(state['bowel_mode']);
-      if(btn) {
-          btn.classList.add('active');
-          toggleBowelDate(state['bowel_mode']);
-      }
+      if(btn) { btn.classList.add('active'); toggleBowelDate(state['bowel_mode']); }
   }
 
-  // Restore ptWard AFTER options are updated
   if(state.ptWard) $('ptWard').value = state.ptWard;
 
   $('devices-container').innerHTML = '';
@@ -468,7 +437,6 @@ function restoreState(state) {
     if(btnToActivate) btnToActivate.classList.add('active');
   });
   
-  // Set manual flags
   const expectedOxyText = getOxyDeviceText(state);
   const bDeviceEl = $('b_device');
   bDeviceEl.dataset.manual = (state.b_device === expectedOxyText || state.b_device === "") ? "false" : "true";
@@ -490,10 +458,9 @@ function restoreState(state) {
    =========================== */
 function initialize() {
   updateLastSaved();
-  initGhostSpans(); // Prepare blood fields for follow up
+  initGhostSpans();
   const debouncedComputeAndSave = debounce(()=>{ computeAll(); saveState(true); }, 600);
   
-  // Create trend buttons
   const trends = ['↑', '↓', '→'];
   document.querySelectorAll('.trend-buttons').forEach(group => {
       trends.forEach(trend => {
@@ -512,15 +479,12 @@ function initialize() {
       });
   });
 
-  // Wiring for Segmented Groups
   document.querySelectorAll('.segmented-group').forEach(group => {
       group.querySelectorAll('.seg-btn').forEach(btn => {
-         if(btn.style.pointerEvents === 'none') return; // Skip label buttons
+         if(btn.style.pointerEvents === 'none') return; 
          btn.addEventListener('click', () => {
              const val = btn.dataset.value;
              const id = group.id.replace('seg_', '');
-             
-             // Toggle off if already active
              if(btn.classList.contains('active')) {
                  btn.classList.remove('active');
                  handleSegmentClick(id, null);
@@ -534,7 +498,6 @@ function initialize() {
       });
   });
   
-  // Simple Toggle Labels (Comorbs)
   document.querySelectorAll('.toggle-label').forEach(el => {
     el.addEventListener('click', ()=> {
       el.dataset.value = el.dataset.value === 'true' ? 'false' : 'true';
@@ -554,19 +517,15 @@ function initialize() {
             $('b_device').dataset.manual = "false";
             $('airway_a').dataset.manual = "false"; 
         }
-          
         group.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        
         if (group.id === 'oxMod') toggleOxyFields();
-        if (group.id === 'neuroConcern') toggleNeuroFields(); // New handler
-        
+        if (group.id === 'neuroConcern') toggleNeuroFields(); 
         const noteWrapperId = group.id + '_note_wrapper';
         const noteWrapper = $(noteWrapperId);
-        if(noteWrapper && group.id !== 'neuroConcern') { // neuro handled separately
+        if(noteWrapper && group.id !== 'neuroConcern') { 
              noteWrapper.style.display = (btn.dataset.value !== 'none' && btn.dataset.value !== '') ? 'block' : 'none';
         }
-
         const fn = (group.id === 'stepdownTime') ? computeAllAndSave : debouncedComputeAndSave;
         fn();
       });
@@ -591,14 +550,12 @@ function initialize() {
   });
   $('chk_aperients').addEventListener('change', debouncedComputeAndSave);
   
-  // Bowel Buttons
   ['btn_bno', 'btn_bo'].forEach(id => {
       $(id).addEventListener('click', (e) => {
           e.preventDefault();
           const btn = $(id);
           const other = id === 'btn_bno' ? $('btn_bo') : $('btn_bno');
           const isActive = btn.classList.contains('active');
-          
           if (isActive) {
               btn.classList.remove('active');
               toggleBowelDate(null);
@@ -611,13 +568,11 @@ function initialize() {
       });
   });
 
-  // PMH Sync
   $('comorb_other_note').addEventListener('input', () => {
        $('pmh_note').value = $('comorb_other_note').value;
        debouncedComputeAndSave();
   });
   
-  // Review Type Switch logic
   document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => {
       updateWardOptions();
       toggleInfusionsBox();
@@ -629,12 +584,10 @@ function initialize() {
     debouncedComputeAndSave();
   });
 
-  // Bloods sync
   ['neut','lymph'].forEach(id => { $(id).addEventListener('input', ()=>{ updateNLR(); debouncedComputeAndSave(); }); });
   const sync = (a,b) => { if (!$(a) || !$(b)) return; $(a).addEventListener('input', ()=>{ $(b).value = $(a).value; debouncedComputeAndSave(); }); $(b).addEventListener('input', ()=>{ $(a).value = $(b).value; debouncedComputeAndSave(); }); };
   sync('adds','atoe_adds'); sync('lactate','bl_lac_review'); sync('hb','bl_hb'); sync('wcc','bl_wcc'); sync('crp','bl_crp'); sync('neut','bl_neut'); sync('lymph','bl_lymph');
   
-  // Overrides
   const ovA = $('override_amber'), ovR = $('override_red'), ovC = $('override_clear');
   const setOverride = (level) => {
     $('override').value = level;
@@ -647,7 +600,6 @@ function initialize() {
   ovR.addEventListener('click', ()=> setOverride('red'));
   ovC.addEventListener('click', ()=> setOverride('none'));
 
-  // Accordions
   document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
     const btn = wrapper.querySelector('.accordion');
     const panel = wrapper.querySelector('.panel');
@@ -664,9 +616,8 @@ function initialize() {
     });
   });
   
-  // Quick Selects
   document.querySelectorAll('.quick-select').forEach(btn => {
-      if(btn.onclick || btn.id.includes('btn_b')) return; // skip inline and special handlers
+      if(btn.onclick || btn.id.includes('btn_b')) return; 
       btn.addEventListener('click', (e) => {
           e.preventDefault();
           const targetEl = $(btn.dataset.target);
@@ -685,35 +636,28 @@ function initialize() {
         });
     });
 
-  // Footer Actions
   $('copyBtn').addEventListener('click', ()=> {
     navigator.clipboard.writeText($('summary').value).then(()=> showToast('Summary copied',1400)).catch(()=> showToast('Copy failed',2000));
   });
   $('footerSave').addEventListener('click', ()=> { saveState(true); showToast('Saved',900); });
   $('footerCopy').addEventListener('click', ()=> $('copyBtn').click() );
   
-  // Follow Up Button
   const fuBtn = $('followUpBtn');
   if(fuBtn) fuBtn.addEventListener('click', triggerFollowUpMode);
 
-  // Clear Data
   const clearDataAction = () => {
     if (!confirm('Are you sure you want to clear all data for this patient?')) return;
     pushUndo(getState());
     
     staticInputs.forEach(id=>{ const el=$(id); if(el) el.value=''; });
-    
-    // Reset segmented controls
     document.querySelectorAll('.segmented-group').forEach(group => {
         group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     });
-    // Reset simple toggles
     document.querySelectorAll('.toggle-label').forEach(el => {
         el.dataset.value = 'false';
         el.classList.remove('active');
     });
 
-    // Hide side effects
     document.querySelectorAll('.concern-note').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.sub-question-wrapper').forEach(el => {
         el.style.display = 'none'; el.classList.remove('show');
@@ -727,7 +671,6 @@ function initialize() {
     document.querySelectorAll('.trend-buttons .trend-btn').forEach(btn => btn.classList.remove('active'));
     $('devices-container').innerHTML = '';
     
-    // Reset Ward list to post default
     document.querySelector('input[name="reviewType"][value="post"]').checked = true;
     updateWardOptions();
     
@@ -739,18 +682,15 @@ function initialize() {
     $('airway_a').dataset.manual = "false";
     $('dischargeNudge').style.display = 'none';
     
-    // Reset Bowels
     $('btn_bno').classList.remove('active');
     $('btn_bo').classList.remove('active');
     toggleBowelDate(null);
     
-    // Reset Override
     $('override').value = 'none';
     $('override_reason_box').style.display = 'none';
     $('override_red').classList.remove('active');
     $('override_amber').classList.remove('active');
     
-    // Reset Ghosts & Previous Risks
     document.querySelectorAll('.ghost-val').forEach(s => s.textContent='');
     const prList = $('prevRiskList'); if(prList) prList.innerHTML='';
     const prCont = $('prevRiskContainer'); if(prCont) prCont.style.display='none';
@@ -766,7 +706,6 @@ function initialize() {
   $('clearDataBtnTop').addEventListener('click', clearDataAction);
   $('clearDataBtnBottom').addEventListener('click', clearDataAction);
 
-  // Dark Mode
   const darkBtn = $('darkToggle');
   const applyDark = (on) => {
     document.body.classList.toggle('dark', !!on);
@@ -777,18 +716,14 @@ function initialize() {
   darkBtn.addEventListener('click', ()=> { const on = !document.body.classList.contains('dark'); applyDark(on); });
   if (localStorage.getItem('alertToolDark') === '1') applyDark(true);
 
-  // Init sequence
   const saved = loadState();
-  updateWardOptions(); // Pre-load options
-  if (saved) {
-    restoreState(saved);
-  }
+  updateWardOptions(); 
+  if (saved) { restoreState(saved); }
   
   toggleOxyFields();
   toggleInfusionsBox();
   toggleNeuroFields();
 
-  // Open accordions
   const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
   document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
       const id = wrapper.dataset.accordionId;
@@ -809,7 +744,6 @@ function initialize() {
    7. UX Logic & Event Handlers
    =========================== */
 function handleSegmentClick(id, value) {
-    // value is string "true", "false", or null
     const noteWrapper = $(id + '_note_wrapper');
     if(noteWrapper) {
         noteWrapper.style.display = (value === "true") ? 'block' : 'none';
@@ -968,11 +902,14 @@ function updateSingleBloodFlag(key, value) {
     const inputEl = $(`bl_${key}`);
     const rangeEl = $(`bl_${key}_range`);
     if (inputEl) {
-        const isAbnormal = value !== null && (value < range.low || value > range.high);
+        let isAbnormal = false;
+        if(key === 'egfr') { isAbnormal = value < range.low; }
+        else { isAbnormal = value !== null && (value < range.low || value > range.high); }
+        
         inputEl.classList.toggle('blood-abnormal', isAbnormal);
         if (rangeEl) {
             if(isAbnormal){
-              rangeEl.textContent = `(Normal: ${range.low}-${range.high})`;
+              rangeEl.textContent = key === 'egfr' ? `(Target: >${range.low})` : `(Normal: ${range.low}-${range.high})`;
               rangeEl.style.display = 'block';
             } else {
               rangeEl.style.display = 'none';
@@ -1051,38 +988,46 @@ function computeAll() {
   const ward = s.ptWard === 'Other' ? s.ptWardOther : s.ptWard;
   const location = [ward, s.ptBed].filter(Boolean).join(' ').trim();
   
-  // Scoring Logic
+  /* --- SCORING LOGIC --- */
+  
+  // 1. ADDS Score
+  const adds = num(s.adds);
+  if (adds !== null) {
+      const timeData = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
+      const hours = timeData.hours || 0;
+      const addsTrend = s['adds_trend'] || '';
+      
+      if (adds >= 4) {
+          red.push(`ADDS ${adds}`); 
+          flaggedElements.red.push('adds');
+      } 
+      else if (adds === 3) {
+          if (hours < 24) {
+              amber.push(`ADDS 3 (<24h stepdown)`);
+              flaggedElements.amber.push('adds');
+          } else {
+              // > 24 hours: Check Trend
+              if (addsTrend === '→' || addsTrend === '↓') {
+                  // Stable/Improving -> Green (No flag added)
+              } else {
+                  // Up trend or Unknown -> Amber
+                  amber.push(`ADDS 3 (Trend: ${addsTrend || 'Unspecified'})`);
+                  flaggedElements.amber.push('adds');
+              }
+          }
+      }
+  }
+
+  // 2. Flags
   const icuLos = num(s.icuLos);
   const immobility = s.immobility === true;
   const pressorReason = $('pressorReason').querySelector('.active')?.dataset.value;
   const pressorsRed = (s.pressors === true && pressorReason === 'shock');
   const pressorsAmber = (s.pressors === true && pressorReason === 'routine');
-  
   const lactateVal = num(s.lactate);
-  const hasSignificantFlags = pressorsRed || (lactateVal !== null && lactateVal > 2.0);
   
-  let hasCombinedRedFlag = false;
-
-  if ((immobility && icuLos >= 4) || (icuLos >= 4 && hasSignificantFlags)) {
-      let reason = (immobility && icuLos >= 4) 
-          ? `Immobility >48h + ICU LOS ${icuLos} days` 
-          : `ICU LOS ${icuLos} days + Significant flag (${pressorsRed ? 'vasopressors required' : 'lactate >2'})`;
-      red.push(reason);
-      if (immobility) flaggedElements.red.push('seg_immobility');
-      flaggedElements.red.push('icuLos');
-      if (pressorsRed) flaggedElements.red.push('seg_pressors');
-      if (lactateVal > 2.0) flaggedElements.red.push('lactate');
-      hasCombinedRedFlag = true;
-  }
-
-  if (immobility && !hasCombinedRedFlag) {
-      addRisk(amber, 'Immobility >48h', s.immobility_note, 'seg_immobility', 'amber');
-  }
-
-  if (icuLos > 7 && !hasCombinedRedFlag) {
-      amber.push(`ICU LOS ${icuLos} days`);
-      flaggedElements.amber.push('icuLos');
-  }
+  // Immobility > 48h -> Amber
+  if (immobility) addRisk(amber, 'Immobility >48h', s.immobility_note, 'seg_immobility', 'amber');
 
   // Oxygen
   const oxModGroup = $('oxMod');
@@ -1109,42 +1054,34 @@ function computeAll() {
   if (s.intubated === true) {
       const reason = $('intubatedReason').querySelector('.active')?.dataset.value;
       let label = 'Intubated in last 24h';
-      if (reason === 'concern') {
-          addRisk(red, `${label} (Concerns)`, s.intubation_details, 'seg_intubated', 'red');
-      } else {
-          // Routine/Elective
-          addRisk(amber, `${label} (Routine/Elective)`, s.intubation_details, 'seg_intubated', 'amber');
-      }
+      if (reason === 'concern') addRisk(red, `${label} (Concerns)`, s.intubation_details, 'seg_intubated', 'red');
+      else addRisk(amber, `${label} (Routine/Elective)`, s.intubation_details, 'seg_intubated', 'amber');
   }
 
   if (s.rapid_wean === true) addRisk(red, 'Rapid oxygen wean in last 12h', s.rapid_wean_note, 'seg_rapid_wean', 'red');
-  if (s.after_hours === true) addRisk(red, 'Discharged after-hours', s.after_hours_note, 'seg_after_hours', 'red');
   
-  // Pressors solo logic
-  if (pressorsRed && !hasCombinedRedFlag) addRisk(red, 'Vasopressors required (Shock/Complicated)', s.pressors_note, 'seg_pressors', 'red');
+  // After Hours - Downgraded to Amber
+  if (s.after_hours === true) addRisk(amber, 'Discharged after-hours', s.after_hours_note, 'seg_after_hours', 'amber');
+  
+  if (pressorsRed) addRisk(red, 'Vasopressors required (Shock/Complicated)', s.pressors_note, 'seg_pressors', 'red');
   else if (pressorsAmber) addRisk(amber, 'Vasopressors (Routine/Short term)', s.pressors_note, 'seg_pressors', 'amber');
 
-  if (num(s.adds) >= 3) { red.push(`ADDS ${s.adds}`); flaggedElements.red.push('adds');}
   if (lactateVal > 2.5) { red.push(`Lactate ${lactateVal}`); flaggedElements.red.push('lactate');}
-  else if (lactateVal >= 2.0 && !hasCombinedRedFlag) { amber.push(`Lactate ${lactateVal}`); flaggedElements.amber.push('lactate');}
+  else if (lactateVal >= 2.0) { amber.push(`Lactate ${lactateVal}`); flaggedElements.amber.push('lactate');}
   
   if (s.uop === true) addRisk(red, 'UOP concerning / downtrending', s.uop_note, 'seg_uop', 'red');
   if (s.renal === true) addRisk(red, 'Renal Concern', s.renal_note, 'seg_renal', 'red');
   
-  // Neuro - 3 Way Split
-  if (s.neuroConcern === 'severe') {
-      addRisk(red, 'Severe Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
-  } else if (s.neuroConcern === 'mod') {
-      addRisk(red, 'Moderate Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
-  } else if (s.neuroConcern === 'mild') {
-      addRisk(amber, 'Mild Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'amber');
-  }
+  // Neuro
+  if (s.neuroConcern === 'severe') addRisk(red, 'Severe Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
+  else if (s.neuroConcern === 'mod') addRisk(red, 'Moderate Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
+  else if (s.neuroConcern === 'mild') addRisk(amber, 'Mild Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'amber');
   
   // Electrolyte
   if (s.electrolyteConcern === 'severe') addRisk(red, 'Severe electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'red');
   else if (s.electrolyteConcern === 'mild') addRisk(amber, 'Electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'amber');
 
-  // Resp Concern - 3 Way Split
+  // Resp Concern
   if (s.dyspneaConcern === 'severe') addRisk(red, 'Severe respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
   else if (s.dyspneaConcern === 'mod') addRisk(red, 'Moderate respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
   else if (s.dyspneaConcern === 'mild') addRisk(amber, 'Mild respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'amber');
@@ -1157,7 +1094,7 @@ function computeAll() {
       flaggedElements.amber.push('hb'); flaggedElements.amber.push('seg_hb_dropping');
   }
 
-  // Comorbs (Simple Toggles)
+  // Comorbs
   const comorbIds = ['comorb_copd','comorb_hf','comorb_esrd','comorb_diabetes','comorb_cirrhosis', 'comorb_other'];
   const comorbCount = comorbIds.filter(id => s[id] === true).length;
   if (comorbCount >= 3) { 
@@ -1171,7 +1108,7 @@ function computeAll() {
 
   // Infection
   if (s.infection === true) {
-     const wcc = num(s.wcc), crp = num(s.crp), nlr = updateNLR(), temp = num(s.e_temp);
+     const wcc = num(s.wcc), crp = num(s.crp), nlr = updateNLR();
      let markerParts = [];
      let hasRedMarker = false, hasAmberMarker = false;
      if (wcc !== null && (wcc < 4 || wcc > 11)) { markerParts.push(`WCC ${wcc}`); hasRedMarker = true; }
@@ -1193,6 +1130,14 @@ function computeAll() {
   else if ($('override').value === 'amber') amber.push(`Override: CAT 2 concern${overrideNote}`);
 
   updateBloodFlags(s);
+  
+  /* --- LOS ESCALATION LOGIC --- */
+  // If LOS > 5 AND there are other risks, upgrade EVERYTHING to Red (CAT 1)
+  if (icuLos > 5 && (red.length > 0 || amber.length > 0)) {
+      red.push(`ICU LOS ${icuLos} days (Escalated due to presence of other risks)`);
+      // Move all ambers to red? Not physically, but the Category becomes Red.
+      // We don't need to move arrays, because red.length > 0 ensures CAT 1.
+  }
 
   // Category Calc
   const redCount = red.length;
@@ -1219,7 +1164,6 @@ function computeAll() {
       flagListEl.innerHTML = `<div style="color:var(--muted)">No risk factors identified</div>`;
   }
   
-  // Highlights
   document.querySelectorAll('.flag-red, .flag-amber').forEach(el => el.classList.remove('flag-red', 'flag-amber'));
   flaggedElements.red.forEach(id => { const el=$(id); if(el) el.classList.add('flag-red'); });
   flaggedElements.amber.forEach(id => { const el=$(id); if(el) el.classList.add('flag-amber'); });
@@ -1238,7 +1182,6 @@ function computeAll() {
   }
   followUpEl.innerHTML = followUpHTML;
   
-  // Discharge Nudge
   const wardTime = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
   const nudgeEl = $('dischargeNudge');
   nudgeEl.style.display = 'none';
@@ -1251,7 +1194,6 @@ function computeAll() {
       if(nudgeText) { nudgeEl.textContent = nudgeText; nudgeEl.style.display = 'block'; }
   }
 
-  // Footer
   $('footerName').textContent = s.ptName || '--';
   $('footerLocation').textContent = location || '--';
   $('footerAdmission').textContent = s.ptAdmissionReason || '--';
@@ -1279,7 +1221,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   
   headerLines.push(reviewTitle, `Time of review: ${getRoundedTime()}`);
   
-  // Use stepdown date as ICU discharge date
   if (s.stepdownDate) headerLines.push(`ICU Discharge Date: ${formatDateAUS(s.stepdownDate)}`);
 
   const stepdownParts = [];
@@ -1294,14 +1235,15 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   
   // A-E
   const atoe = [];
-  // MODS line
   if (s.chk_use_mods === true) {
       const modsParts = [];
       if(s.mods_score) modsParts.push(`MODS Score: ${s.mods_score}`);
       if(s.mods_details) modsParts.push(`Details: ${s.mods_details}`);
       if(modsParts.length > 0) atoe.push(modsParts.join(' | '));
   } else if(s.adds) {
-      atoe.push(`ADDS: ${s.adds}`); 
+      let addsStr = `ADDS: ${s.adds}`;
+      if(s.adds_trend) addsStr += ` (Trend: ${s.adds_trend})`;
+      atoe.push(addsStr);
   }
   
   if (s.airway_a) atoe.push(`A: ${s.airway_a.trim()}`);
@@ -1365,10 +1307,10 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
       lines.push(...otherSys);
   }
 
-  // Bloods
+  // Bloods (Added Urea/eGFR)
   const bloodLines = [];
-  const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4' };
-  const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','plts','alb','neut','lymph'];
+  const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4', 'urea': 'Urea', 'egfr': 'eGFR' };
+  const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','urea','egfr','plts','alb','neut','lymph'];
   
   const bloods = bloodParts.map(k => {
     const v = s[`bl_${k}`]; if (!v) return null;
@@ -1407,6 +1349,9 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   
   // Context
   const contextLines = [];
+  if (s.hb_dropping_note && s.hb_dropping === true) {
+      contextLines.push(`Hb Plan: ${s.hb_dropping_note.trim()}`);
+  }
   if (s.goc_note) {
     const gocText = s.goc_note.trim();
     contextLines.push(gocText.toLowerCase().startsWith('goc') ? gocText : `GOC: ${gocText}`);
@@ -1416,7 +1361,7 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
   if (contextLines.length) lines.push('', ...contextLines);
   
-  // -- NEW SECTION: Resolved/Persistent Risks --
+  // Previous Risks
   const prevRiskList = document.getElementById('prevRiskList');
   if (prevRiskList && prevRiskList.children.length > 0) {
       const unresolved = [];
@@ -1431,11 +1376,9 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
       if(unresolved.length) lines.push('', 'PERSISTENT PREVIOUS CONCERNS:', ...unresolved.map(u => `- ${u}`));
   }
   
-  // Risk Factors (Current)
   const allFlags = [...red, ...amber];
   if (allFlags.length) lines.push('', 'IDENTIFIED RISK FACTORS:', ...allFlags.map(f=>'- '+f));
   
-  // Plan
   lines.push('', 'PLAN:');
   if (s.chk_discharge_alert === true) {
       lines.push('- Follow-up: Discharge from ALERT nursing post ICU review list.');
@@ -1458,9 +1401,8 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
    9. REDCap Integration
    =========================== */
 function openRedcapAccelerator() {
-    // 1. GATHER DATA
     var roleVal = document.querySelector('input[name="clinicianRole"]:checked')?.value || "ALERT CNS";
-    var teamCode = (roleVal === "ALERT CN") ? "2" : "1"; // 1=CNS, 2=CN
+    var teamCode = (roleVal === "ALERT CN") ? "2" : "1"; 
     var score = document.getElementById('adds').value || "0";
     var isDischarge = document.getElementById('chk_discharge_alert').checked;
 
@@ -1478,7 +1420,6 @@ function openRedcapAccelerator() {
     var currentWardName = document.getElementById('ptWard').value; 
     var locationCode = wardMap[currentWardName] || ""; 
 
-    // 2. CALCULATE DATE & SHIFT
     var now = new Date();
     var day = ("0" + now.getDate()).slice(-2);
     var month = ("0" + (now.getMonth() + 1)).slice(-2);
@@ -1489,17 +1430,15 @@ function openRedcapAccelerator() {
     var currentMin = now.getMinutes();
     var decimalTime = currentHour + (currentMin / 60);
 
-    var shiftCode = "3"; // Default Night
-    if (decimalTime >= 7.5 && decimalTime < 14.5) { shiftCode = "1"; } // Day
-    else if (decimalTime >= 14.5 && decimalTime < 20.0) { shiftCode = "2"; } // Eve
+    var shiftCode = "3"; 
+    if (decimalTime >= 7.5 && decimalTime < 14.5) { shiftCode = "1"; } 
+    else if (decimalTime >= 14.5 && decimalTime < 20.0) { shiftCode = "2"; } 
     
-    // 3. CATEGORY
     var catText = document.getElementById('footerScore').innerText || "CAT 3";
     var catCode = "3"; 
     if (catText.includes("CAT 1")) { catCode = "1"; }
     else if (catText.includes("CAT 2")) { catCode = "2"; }
 
-    // 4. BUILD URL
     var params = [];
     params.push("site=1");              
     params.push("contactreason=6");     
@@ -1527,7 +1466,6 @@ function openRedcapAccelerator() {
     window.open(finalUrl, '_blank');
 }
 
-// Start
 document.addEventListener('DOMContentLoaded', ()=> {
   initialize();
 });
