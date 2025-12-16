@@ -18,12 +18,10 @@ const normalRanges = {
   mg: { low: 0.7, high: 1.1 }, alb: { low: 35, high: 50 },
   lac_review: { low: 0.5, high: 2.0 },
   phos: { low: 0.8, high: 1.5 },
-  // NEW RANGES
   urea: { low: 2.5, high: 7.8 }, 
-  egfr: { low: 60, high: 999 } // Flag if < 60
+  egfr: { low: 60, high: 999 } 
 };
 
-/* Fields to automatically save/restore */
 const staticInputs = [
   'ptName','ptMrn','ptAge','ptWard','ptBed','ptWardOther','ptAdmissionReason','icuLos','stepdownDate',
   'npFlow','hfnpFio2','hfnpFlow','nivFio2', 'nivPeep', 'nivPs','override','overrideNote',
@@ -34,22 +32,20 @@ const staticInputs = [
   'bl_wcc','bl_crp','bl_neut','bl_lymph',
   'bl_hb','bl_plts','bl_k','bl_na',
   'bl_cr_review','bl_mg','bl_alb','bl_lac_review','bl_phos',
-  'bl_urea', 'bl_egfr', // NEW BLOODS
+  'bl_urea', 'bl_egfr',
   'elec_replace_note', 'goc_note', 'allergies_note', 'pics_note', 'context_other_note', 'pmh_note',
   'adds','lactate','hb','wcc','crp','neut','lymph', 'infusions_note',
   'dyspneaConcern_note', 'renalConcern_note', 'uopLow_note', 'neuroConcern_note', 'infectionConcern_note',
   'electrolyteConcern_note',
   'after_hours_note', 'pressors_note', 'hist_o2_note', 'rapid_wean_note', 'immobility_note', 'comorb_other_note',
-  'intubation_details', 'hb_dropping_note' // NEW HB NOTE
+  'intubation_details', 'hb_dropping_note'
 ];
 
-// Segmented Controls
 const segmentedInputs = [
   'hb_dropping', 'after_hours', 'pressors', 'hist_o2', 'intubated', 'rapid_wean',
   'renal', 'uop', 'immobility', 'infection', 'new_bloods_ordered'
 ];
 
-// Simple Toggles
 const toggleInputs = [
   'comorb_copd','comorb_hf','comorb_esrd','comorb_diabetes','comorb_cirrhosis', 'comorb_other'
 ];
@@ -58,91 +54,59 @@ const selectInputs = [
     'oxMod','dyspneaConcern','neuroConcern','neuroType','electrolyteConcern','stepdownTime', 
     'tracheType', 'tracheStatus', 'pressorReason', 'intubatedReason'
 ];
-const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'PICC Line', 'Enteral Tube', 'IDC', 'Pacing Wire', 'Drain', 'Wound', 'Other Device']; // ADDED PICC
+const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'PICC Line', 'Enteral Tube', 'IDC', 'Pacing Wire', 'Drain', 'Wound', 'Other Device'];
 
 /* ===========================
-   2. Persistence Helpers
+   2. DOM & Logic Helpers
    =========================== */
-function nowTimeStr() {
-  const d = new Date(); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-}
-function showToast(msg, timeout=2500, actionText=null, actionCallback=null) {
-  const t = $('toast');
-  t.innerHTML = msg;
-  if (actionText && actionCallback) {
-    const btn = document.createElement('button');
-    btn.textContent = actionText;
-    btn.className = 'btn small';
-    btn.style.marginLeft = '12px';
-    btn.addEventListener('click', actionCallback);
-    t.appendChild(btn);
-  }
-  t.classList.add('show');
-  setTimeout(()=> t.classList.remove('show'), timeout);
-}
-function saveState(instantly=false) {
-  const state = getState();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  localStorage.setItem('alertNursingToolLastSaved', new Date().toISOString());
-  updateLastSaved();
-}
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch(e){ return null; }
-}
-function pushUndo(snapshot) {
-  try {
-    localStorage.setItem(UNDO_KEY, JSON.stringify({ snapshot, created: Date.now() }));
-  } catch(e){}
-}
-function popUndo() {
-  try {
-    const raw = localStorage.getItem(UNDO_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    const age = Date.now() - (obj.created || 0);
-    if (age > 10000) { localStorage.removeItem(UNDO_KEY); return null; }
-    localStorage.removeItem(UNDO_KEY);
-    return obj.snapshot;
-  } catch(e){ return null; }
-}
-function updateLastSaved() {
-  const iso = localStorage.getItem('alertNursingToolLastSaved');
-  if (!iso) { $('lastSaved').textContent = 'Last saved: --:--'; return; }
-  const t = new Date(iso);
-  $('lastSaved').textContent = 'Last saved: ' + t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-}
-
-/* ===========================
-   3. DOM & Logic Helpers
-   =========================== */
-function createDeviceEntry(type, value = '') {
+function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     const container = $('devices-container');
     const div = document.createElement('div');
     div.className = 'device-entry';
     div.dataset.type = type;
-    div.innerHTML = `
-        <label>${type}</label>
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <textarea style="flex: 1;" placeholder="Enter details for ${type}...">${value}</textarea>
-            <div class="remove-entry" role="button" tabindex="0">Remove</div>
-        </div>
-    `;
-    container.appendChild(div);
-
-    const ta = div.querySelector('textarea');
-    ta.addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
-    const rem = div.querySelector('.remove-entry');
-    rem.addEventListener('click', () => { 
-        div.remove(); 
-        computeAll(); 
-        saveState(); 
-    });
+    
+    // Standard Entry
+    if (!isGhostCandidate) {
+        div.innerHTML = `
+            <label>${type}</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <textarea style="flex: 1;" placeholder="Enter details for ${type}...">${value}</textarea>
+                <div class="remove-entry" role="button" tabindex="0">Remove</div>
+            </div>
+        `;
+        container.appendChild(div);
+        const ta = div.querySelector('textarea');
+        ta.addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
+        div.querySelector('.remove-entry').addEventListener('click', () => { div.remove(); computeAll(); saveState(); });
+    } 
+    // Ghost Candidate (Confirm/Remove)
+    else {
+        div.style.border = "1px dashed var(--accent)";
+        div.style.background = "rgba(0, 122, 122, 0.05)";
+        div.innerHTML = `
+            <label style="color:var(--accent);">❓ Confirm Previous Device: ${type}</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <textarea style="flex: 1;" readonly>${value}</textarea>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn small primary confirm-dev">Confirm (Keep)</button>
+                <button class="btn small danger remove-dev">Remove</button>
+            </div>
+        `;
+        container.appendChild(div);
+        
+        div.querySelector('.confirm-dev').addEventListener('click', () => {
+             // Convert to standard entry
+             div.remove();
+             createDeviceEntry(type, value, false);
+             computeAllAndSave();
+        });
+        div.querySelector('.remove-dev').addEventListener('click', () => {
+             div.remove();
+             computeAllAndSave();
+        });
+    }
     div.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    ta.focus();
 }
 
 function getOxyDeviceText(s) {
@@ -188,11 +152,10 @@ function stackText(id, text) {
 }
 
 /* ===========================
-   4. Ghost Value & Follow-up Logic
+   3. Ghost Value & DMR Parsing
    =========================== */
 function initGhostSpans() {
-    const bloodItems = document.querySelectorAll('.blood-item');
-    bloodItems.forEach(item => {
+    document.querySelectorAll('.blood-item').forEach(item => {
         if(!item.querySelector('.ghost-val')) {
             const span = document.createElement('span');
             span.className = 'ghost-val';
@@ -202,24 +165,19 @@ function initGhostSpans() {
     });
 }
 
-function triggerFollowUpMode() {
-    if(!confirm("Start a Follow-up for this patient? \n\nThis will keep demographics & lines, clear acute vitals, and set yesterday's bloods as a reference hint.")) return;
+// === THE DMR PARSER ===
+function processDmrNote() {
+    const text = $('dmrPasteInput').value;
+    if(!text || text.length < 10) return;
 
-    const currentState = getState();
-    
-    // Capture Bloods for Ghosting (Added Urea/eGFR)
-    const ghostData = {};
-    ['lac_review','hb','wcc','crp','neut','lymph','plts','k','na','mg','phos','cr_review','alb','urea','egfr'].forEach(k => {
-        ghostData[k] = currentState['bl_'+k];
-    });
+    // 1. Sanity Check: Is this an ALERT note?
+    if(!text.includes("Patient:") && !text.includes("ALERT Nursing")) {
+        $('pasteError').style.display = 'block';
+        return;
+    }
+    $('pasteError').style.display = 'none';
 
-    const currentFlags = [];
-    document.querySelectorAll('#flagList div').forEach(div => {
-        if(div.textContent.includes('No risk')) return;
-        currentFlags.push(div.textContent.replace('[CAT 1]', '').replace('[CAT 2]', '').trim());
-    });
-    
-    // Clear Inputs
+    // 2. Prepare Tool (Clear Vitals/Bloods but keep user session info if any)
     const volatileInputs = [
         'adds','lactate','hb','wcc','crp','neut','lymph', 
         'airway_a','b_rr','b_spo2','b_wob',
@@ -228,73 +186,125 @@ function triggerFollowUpMode() {
         'atoe_adds', 'mods_score'
     ];
     volatileInputs.forEach(id => { if($(id)) $(id).value = ''; });
-
-    ['bl_lac_review','bl_hb','bl_wcc','bl_crp','bl_neut','bl_lymph','bl_plts','bl_k','bl_na','bl_mg','bl_phos','bl_cr_review','bl_alb','bl_urea','bl_egfr'].forEach(id => {
-        if($(id)) $(id).value = '';
-    });
-
-    // Reset Segments
-    ['hb_dropping','rapid_wean','after_hours','uop','pressors'].forEach(id => {
-         const group = $('seg_'+id);
-         if(group) {
-             group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-             handleSegmentClick(id, null); 
-         }
-    });
-
-    // Clear Concerns
-    ['dyspneaConcern','neuroConcern','electrolyteConcern'].forEach(id => {
-         const group = $(id);
-         if(group) {
-            group.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
-            const noneBtn = group.querySelector('[data-value="none"]');
-            if(noneBtn) noneBtn.click();
-         }
-    });
-
-    // Apply Ghosts
-    Object.keys(ghostData).forEach(k => {
-        const val = ghostData[k];
-        const input = $('bl_'+k);
-        if(input && val) {
-            const wrapper = input.parentElement;
-            const ghost = wrapper.querySelector('.ghost-val');
-            if(ghost) ghost.textContent = `Prev: ${val}`;
-        }
-    });
-
-    // Previous Risks
-    const prevContainer = $('prevRiskContainer');
-    const prevList = $('prevRiskList');
     
-    if(prevList) {
-        prevList.innerHTML = '';
-        if(currentFlags.length > 0) {
-            prevContainer.style.display = 'block';
-            currentFlags.forEach((flag) => {
-                const div = document.createElement('div');
-                div.className = 'prev-risk-item';
-                div.innerHTML = `
-                    <span style="color:var(--muted)">${flag}</span>
-                    <label style="font-size:0.85rem; display:flex; align-items:center; gap:6px; cursor:pointer;">
-                        <input type="checkbox" class="resolved-check" data-flag="${flag}"> Resolved?
-                    </label>
-                `;
-                prevList.appendChild(div);
-            });
-        } else {
-            prevContainer.style.display = 'none';
-        }
+    // 3. Extract & Pre-fill Static Data
+    // Helper Regex
+    const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
+    
+    const name = extract(/Patient:\s*(.*?)\s*\|/);
+    const mrn = extract(/URN:.*?(\d{3,})/); // Grab last digits
+    const wardMatch = extract(/Location:\s*(.*?)\s*\|?/); 
+    const admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
+    const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/);
+    const icuLos = extract(/ICU LOS:\s*(\d+)/);
+    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|\n[A-Z])/); // Multiline until double newline or new header
+    const allergies = extract(/Allergies:\s*(.*?)\n/);
+    const goc = extract(/GOC:\s*(.*?)\n/);
+
+    if(name) $('ptName').value = name;
+    if(mrn) $('ptMrn').value = mrn.slice(-3); // Ensure only 3 digits
+    if(wardMatch) {
+         // Attempt to parse ward/bed. Very rough guess.
+         const parts = wardMatch.split(' ');
+         if(parts.length > 0) $('ptWard').value = parts[0]; 
+         if(parts.length > 1) $('ptBed').value = parts[1];
+         // Trigger update for 'Other' ward logic
+         $('ptWard').dispatchEvent(new Event('change'));
+    }
+    if(admReason) $('ptAdmissionReason').value = admReason;
+    if(icuLos) $('icuLos').value = icuLos;
+    if(stepdownDate) {
+        // Convert DD/MM/YYYY to YYYY-MM-DD
+        const [d,m,y] = stepdownDate.split('/');
+        $('stepdownDate').value = `${y}-${m}-${d}`;
+    }
+    if(pmh) $('pmh_note').value = pmh.replace(/\n/g, ', ');
+    if(allergies) $('allergies_note').value = allergies;
+    if(goc) $('goc_note').value = goc;
+
+    // 4. Extract Ghost Vitals
+    // Note: This relies on the Summary format "B: RR 20, SpO2 98..."
+    const ghostVitals = {};
+    const rr = extract(/RR\s*(\d+)/); if(rr) ghostVitals['Prev RR'] = rr;
+    const spo2 = extract(/SpO2\s*(\d+)/); if(spo2) ghostVitals['Prev SpO2'] = spo2;
+    const hr = extract(/HR\s*(\d+)/); if(hr) ghostVitals['Prev HR'] = hr;
+    const bp = extract(/NIBP\s*(\d+\/\d+)/); if(bp) ghostVitals['Prev BP'] = bp;
+    
+    // Apply Vitals Ghosts (Custom location? For now we only have ghosts on Bloods/Inputs. 
+    // We can add simple placeholders or just let the user see them in the paste box? 
+    // Actually, let's create simple hints in the placeholders if they are empty)
+    if(rr) $('b_rr').placeholder = `Prev: ${rr}`;
+    if(spo2) $('b_spo2').placeholder = `Prev: ${spo2}`;
+    if(hr) $('c_hr').placeholder = `Prev: ${hr}`;
+    if(bp) $('c_nibp').placeholder = `Prev: ${bp}`;
+
+    // 5. Extract & Ghost Bloods
+    // Format: "Bloods: Lac 1.2, Hb 90, WCC 14..."
+    const bloodsBlock = extract(/Bloods:\s*(.*?)\n/);
+    if(bloodsBlock) {
+        const map = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
+        
+        // Remove text like (uptrending)
+        const cleanBloods = bloodsBlock.replace(/\(.*?\)/g, ''); 
+        const items = cleanBloods.split(',');
+        
+        items.forEach(item => {
+            const parts = item.trim().split(' ');
+            if(parts.length >= 2) {
+                const label = parts[0];
+                const val = parts[1];
+                const inputId = map[label];
+                if(inputId && $(inputId)) {
+                    // Populate Ghost Span
+                    const wrapper = $(inputId).parentElement;
+                    const ghost = wrapper.querySelector('.ghost-val');
+                    if(ghost) ghost.textContent = `Prev: ${val}`;
+                }
+            }
+        });
     }
 
-    computeAll();
-    saveState();
-    showToast("Follow-up started.");
+    // 6. Devices (Confirm/Reject)
+    // Find "DEVICES:" then read lines starting with "-"
+    $('devices-container').innerHTML = ''; // Clear existing
+    const deviceSection = text.match(/DEVICES:\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/);
+    if(deviceSection) {
+        const lines = deviceSection[1].split('\n');
+        lines.forEach(line => {
+            line = line.trim();
+            if(line.startsWith('-')) {
+                // Format: "- Type (Details)"
+                const raw = line.substring(1).trim();
+                let type = raw; 
+                let details = '';
+                
+                // Try to split type and details
+                const parenIndex = raw.indexOf('(');
+                if(parenIndex > -1) {
+                    type = raw.substring(0, parenIndex).trim();
+                    details = raw.substring(parenIndex+1, raw.lastIndexOf(')')).trim();
+                }
+                
+                // Clean up type if it matches known types
+                const knownType = deviceTypes.find(t => type.toLowerCase().includes(t.toLowerCase()));
+                if(knownType) {
+                    createDeviceEntry(knownType, details, true); // True = Ghost Candidate
+                } else {
+                    createDeviceEntry('Other Device', raw, true);
+                }
+            }
+        });
+    }
+
+    // 7. Finish
+    $('dmrPasteCard').style.display = 'none';
+    showToast("Note processed! Please confirm devices and enter today's vitals.");
+    computeAllAndSave();
 }
 
 
 /* ===========================
-   5. State Management
+   4. State Management
    =========================== */
 function getState() {
   const state = {};
@@ -337,11 +347,15 @@ function getState() {
   state['bowel_mode'] = bowelBtn ? bowelBtn.id : null;
 
   state.devices = {};
-  deviceTypes.forEach(type => {
-      state.devices[type] = Array.from(document.querySelectorAll(`.device-entry[data-type="${type}"] textarea`)).map(ta => ta.value);
+  // Only save REAL devices, not ghost candidates
+  document.querySelectorAll('.device-entry').forEach(div => {
+      if(div.querySelector('.confirm-dev')) return; // Skip candidates
+      const type = div.dataset.type;
+      const val = div.querySelector('textarea').value;
+      if(!state.devices[type]) state.devices[type] = [];
+      state.devices[type].push(val);
   });
   
-  // Trends
   document.querySelectorAll('.trend-buttons').forEach(group => {
     const activeBtn = group.querySelector('.trend-btn.active');
     state[group.id] = activeBtn ? activeBtn.dataset.value : '';
@@ -454,13 +468,22 @@ function restoreState(state) {
 }
 
 /* ===========================
-   6. Interactivity & Init
+   5. Interactivity & Init
    =========================== */
 function initialize() {
   updateLastSaved();
   initGhostSpans();
   const debouncedComputeAndSave = debounce(()=>{ computeAll(); saveState(true); }, 600);
   
+  // Paste Handling
+  $('processPasteBtn').addEventListener('click', processDmrNote);
+  $('cancelPasteBtn').addEventListener('click', () => {
+      $('dmrPasteCard').style.display = 'none';
+      $('pasteError').style.display = 'none';
+      $('dmrPasteInput').value = '';
+  });
+  
+  // Trend Buttons
   const trends = ['↑', '↓', '→'];
   document.querySelectorAll('.trend-buttons').forEach(group => {
       trends.forEach(trend => {
@@ -576,6 +599,15 @@ function initialize() {
   document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => {
       updateWardOptions();
       toggleInfusionsBox();
+      
+      // DMR Paste Toggle
+      if(r.value === 'followup') {
+          $('dmrPasteCard').style.display = 'block';
+          $('dmrPasteInput').focus();
+      } else {
+          $('dmrPasteCard').style.display = 'none';
+      }
+      
       debouncedComputeAndSave();
   }));
 
@@ -641,9 +673,6 @@ function initialize() {
   });
   $('footerSave').addEventListener('click', ()=> { saveState(true); showToast('Saved',900); });
   $('footerCopy').addEventListener('click', ()=> $('copyBtn').click() );
-  
-  const fuBtn = $('followUpBtn');
-  if(fuBtn) fuBtn.addEventListener('click', triggerFollowUpMode);
 
   const clearDataAction = () => {
     if (!confirm('Are you sure you want to clear all data for this patient?')) return;
@@ -672,6 +701,7 @@ function initialize() {
     $('devices-container').innerHTML = '';
     
     document.querySelector('input[name="reviewType"][value="post"]').checked = true;
+    $('dmrPasteCard').style.display = 'none';
     updateWardOptions();
     
     $('chk_medical_rounding').checked = false;
@@ -692,6 +722,7 @@ function initialize() {
     $('override_amber').classList.remove('active');
     
     document.querySelectorAll('.ghost-val').forEach(s => s.textContent='');
+    document.querySelectorAll('.input-with-trend input').forEach(i => i.placeholder='');
     const prList = $('prevRiskList'); if(prList) prList.innerHTML='';
     const prCont = $('prevRiskContainer'); if(prCont) prCont.style.display='none';
     
@@ -741,7 +772,7 @@ function initialize() {
 }
 
 /* ===========================
-   7. UX Logic & Event Handlers
+   6. UX Logic & Event Handlers
    =========================== */
 function handleSegmentClick(id, value) {
     const noteWrapper = $(id + '_note_wrapper');
@@ -903,8 +934,12 @@ function updateSingleBloodFlag(key, value) {
     const rangeEl = $(`bl_${key}_range`);
     if (inputEl) {
         let isAbnormal = false;
-        if(key === 'egfr') { isAbnormal = value < range.low; }
-        else { isAbnormal = value !== null && (value < range.low || value > range.high); }
+        // eGFR FIX
+        if (key === 'egfr') {
+            isAbnormal = (value !== null && value < range.low);
+        } else {
+            isAbnormal = value !== null && (value < range.low || value > range.high);
+        }
         
         inputEl.classList.toggle('blood-abnormal', isAbnormal);
         if (rangeEl) {
@@ -932,9 +967,6 @@ function updateWardOtherVisibility() {
     }
 }
 
-/* ===========================
-   8. Scoring & Summary Logic
-   =========================== */
 function calculateTimeOnWard(dateStr, timeOfDay) {
   if (!dateStr) return { text: null, hours: null };
   const timeMap = { 'Morning': 9, 'Afternoon': 15, 'Evening': 18, 'Night': 21 };
@@ -960,7 +992,9 @@ function calculateTimeOnWard(dateStr, timeOfDay) {
   return { text: text, hours: diffHours };
 }
 
-
+/* ===========================
+   7. Scoring & Summary Logic
+   =========================== */
 function computeAll() {
   const s = getState();
   
@@ -1006,11 +1040,8 @@ function computeAll() {
               amber.push(`ADDS 3 (<24h stepdown)`);
               flaggedElements.amber.push('adds');
           } else {
-              // > 24 hours: Check Trend
               if (addsTrend === '→' || addsTrend === '↓') {
-                  // Stable/Improving -> Green (No flag added)
               } else {
-                  // Up trend or Unknown -> Amber
                   amber.push(`ADDS 3 (Trend: ${addsTrend || 'Unspecified'})`);
                   flaggedElements.amber.push('adds');
               }
@@ -1026,7 +1057,6 @@ function computeAll() {
   const pressorsAmber = (s.pressors === true && pressorReason === 'routine');
   const lactateVal = num(s.lactate);
   
-  // Immobility > 48h -> Amber
   if (immobility) addRisk(amber, 'Immobility >48h', s.immobility_note, 'seg_immobility', 'amber');
 
   // Oxygen
@@ -1050,7 +1080,6 @@ function computeAll() {
   // Historical O2
   if (s.hist_o2 === true) addRisk(red, 'Historical high O2/NIV', s.hist_o2_note, 'seg_hist_o2', 'red');
   
-  // Intubation Logic
   if (s.intubated === true) {
       const reason = $('intubatedReason').querySelector('.active')?.dataset.value;
       let label = 'Intubated in last 24h';
@@ -1060,7 +1089,6 @@ function computeAll() {
 
   if (s.rapid_wean === true) addRisk(red, 'Rapid oxygen wean in last 12h', s.rapid_wean_note, 'seg_rapid_wean', 'red');
   
-  // After Hours - Downgraded to Amber
   if (s.after_hours === true) addRisk(amber, 'Discharged after-hours', s.after_hours_note, 'seg_after_hours', 'amber');
   
   if (pressorsRed) addRisk(red, 'Vasopressors required (Shock/Complicated)', s.pressors_note, 'seg_pressors', 'red');
@@ -1072,21 +1100,17 @@ function computeAll() {
   if (s.uop === true) addRisk(red, 'UOP concerning / downtrending', s.uop_note, 'seg_uop', 'red');
   if (s.renal === true) addRisk(red, 'Renal Concern', s.renal_note, 'seg_renal', 'red');
   
-  // Neuro
   if (s.neuroConcern === 'severe') addRisk(red, 'Severe Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
   else if (s.neuroConcern === 'mod') addRisk(red, 'Moderate Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
   else if (s.neuroConcern === 'mild') addRisk(amber, 'Mild Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'amber');
   
-  // Electrolyte
   if (s.electrolyteConcern === 'severe') addRisk(red, 'Severe electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'red');
   else if (s.electrolyteConcern === 'mild') addRisk(amber, 'Electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'amber');
 
-  // Resp Concern
   if (s.dyspneaConcern === 'severe') addRisk(red, 'Severe respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
   else if (s.dyspneaConcern === 'mod') addRisk(red, 'Moderate respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
   else if (s.dyspneaConcern === 'mild') addRisk(amber, 'Mild respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'amber');
 
-  // Hb
   const hb = num(s.hb);
   if (hb !== null && hb <= 70) { red.push(`Anemia concern (Hb ${hb})`); flaggedElements.red.push('hb'); }
   else if (hb !== null && hb <= 100 && s.hb_dropping === true) { 
@@ -1094,7 +1118,6 @@ function computeAll() {
       flaggedElements.amber.push('hb'); flaggedElements.amber.push('seg_hb_dropping');
   }
 
-  // Comorbs
   const comorbIds = ['comorb_copd','comorb_hf','comorb_esrd','comorb_diabetes','comorb_cirrhosis', 'comorb_other'];
   const comorbCount = comorbIds.filter(id => s[id] === true).length;
   if (comorbCount >= 3) { 
@@ -1106,7 +1129,6 @@ function computeAll() {
       comorbIds.forEach(id => {if(s[id]) flaggedElements.amber.push('toggle_'+id) });
   }
 
-  // Infection
   if (s.infection === true) {
      const wcc = num(s.wcc), crp = num(s.crp), nlr = updateNLR();
      let markerParts = [];
@@ -1124,27 +1146,20 @@ function computeAll() {
      addRisk(cat === 'red' ? red : amber, baseText, s.infection_note, 'seg_infection', cat);
   }
 
-  // Override
   const overrideNote = $('overrideNote')?.value ? ` (${$('overrideNote').value})` : '';
   if ($('override').value === 'red') red.push(`Override: CAT 1 concern${overrideNote}`);
   else if ($('override').value === 'amber') amber.push(`Override: CAT 2 concern${overrideNote}`);
 
   updateBloodFlags(s);
   
-  /* --- LOS ESCALATION LOGIC --- */
-  // If LOS > 5 AND there are other risks, upgrade EVERYTHING to Red (CAT 1)
   if (icuLos > 5 && (red.length > 0 || amber.length > 0)) {
       red.push(`ICU LOS ${icuLos} days (Escalated due to presence of other risks)`);
-      // Move all ambers to red? Not physically, but the Category becomes Red.
-      // We don't need to move arrays, because red.length > 0 ensures CAT 1.
   }
 
-  // Category Calc
   const redCount = red.length;
   const amberCount = amber.length;
   const cat = (redCount > 0) ? {id: 'red', text: 'CAT 1', catNum: 1} : (amberCount > 0) ? {id: 'amber', text: 'CAT 2', catNum: 2} : {id: 'green', text: 'CAT 3', catNum: 3};
   
-  // UI Updates
   $('redCount').textContent = redCount;
   $('amberCount').textContent = amberCount;
   $('redCount').style.color = redCount > 0 ? 'var(--red)' : 'var(--ink)';
@@ -1168,7 +1183,6 @@ function computeAll() {
   flaggedElements.red.forEach(id => { const el=$(id); if(el) el.classList.add('flag-red'); });
   flaggedElements.amber.forEach(id => { const el=$(id); if(el) el.classList.add('flag-amber'); });
 
-  // Plan Text
   const followUpEl = $('followUpInstructions');
   let followUpHTML = '';
   if (s.chk_discharge_alert === true) {
@@ -1210,7 +1224,7 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   const trendWord = val => ({ '↑': ' (uptrending)', '↓':' (downtrending)', '→':' (stable)'}[val] || '');
   
   const role = s.clinicianRole || 'ALERT CNS';
-  const reviewTitle = (s.reviewType === 'post') ? `${role} post ICU review` : `${role} pre ICU stepdown review`;
+  const reviewTitle = (s.reviewType === 'post' || s.reviewType === 'followup') ? `${role} post ICU review` : `${role} pre ICU stepdown review`;
   
   const headerLines = [];
   const ptDetails = [];
@@ -1224,7 +1238,7 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   if (s.stepdownDate) headerLines.push(`ICU Discharge Date: ${formatDateAUS(s.stepdownDate)}`);
 
   const stepdownParts = [];
-  if (s.reviewType === 'post' && timeOnWardText) stepdownParts.push(`Time since stepdown: ${timeOnWardText}.`);
+  if (s.reviewType !== 'pre' && timeOnWardText) stepdownParts.push(`Time since stepdown: ${timeOnWardText}.`);
   if (s.icuLos) stepdownParts.push(`ICU LOS: ${s.icuLos} days.`);
   if (stepdownParts.length) headerLines.push('', ...stepdownParts);
   
@@ -1233,7 +1247,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   const lines = [...headerLines, '', `ALERT Nursing Review Category - ${cat.text}`];
   if (s.pmh_note && s.pmh_note.trim()) lines.push('', 'PMH:', s.pmh_note.trim());
   
-  // A-E
   const atoe = [];
   if (s.chk_use_mods === true) {
       const modsParts = [];
@@ -1283,7 +1296,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   if (s.ae_mobility) otherSys.push(`Mobility/MSK: ${s.ae_mobility.trim()}`);
   if (s.ae_diet) otherSys.push(`Diet: ${s.ae_diet.trim()}`);
   
-  // Bowels Logic
   let bowelStr = s.ae_bowels ? s.ae_bowels.trim() : '';
   if (s.bowel_mode === 'btn_bno' && s.bowel_date) {
       const date = formatDateAUS(s.bowel_date);
@@ -1307,7 +1319,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
       lines.push(...otherSys);
   }
 
-  // Bloods (Added Urea/eGFR)
   const bloodLines = [];
   const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4', 'urea': 'Urea', 'egfr': 'eGFR' };
   const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','urea','egfr','plts','alb','neut','lymph'];
@@ -1329,7 +1340,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
       lines.push(`Infusions: ${s.infusions_note.trim()}`);
   }
   
-  // Devices
   if(s.devices) {
       const devLines = [];
       deviceTypes.forEach(type => {
@@ -1347,7 +1357,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
       if(devLines.length) lines.push('', 'DEVICES:', ...devLines.map(d=>'- '+d));
   }
   
-  // Context
   const contextLines = [];
   if (s.hb_dropping_note && s.hb_dropping === true) {
       contextLines.push(`Hb Plan: ${s.hb_dropping_note.trim()}`);
@@ -1361,7 +1370,6 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
   if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
   if (contextLines.length) lines.push('', ...contextLines);
   
-  // Previous Risks
   const prevRiskList = document.getElementById('prevRiskList');
   if (prevRiskList && prevRiskList.children.length > 0) {
       const unresolved = [];
@@ -1398,7 +1406,7 @@ function generateSummary(s, cat, location, timeOnWardText, red, amber) {
 }
 
 /* ===========================
-   9. REDCap Integration
+   8. REDCap Integration
    =========================== */
 function openRedcapAccelerator() {
     var roleVal = document.querySelector('input[name="clinicianRole"]:checked')?.value || "ALERT CNS";
