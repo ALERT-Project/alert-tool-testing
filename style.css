@@ -36,12 +36,19 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .concern-note textarea { min-height: 38px; font-size: 0.9rem; }
 
 /* --- Ghost Value Styling (Blue Text) --- */
+.label-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.label-row label { margin-bottom: 0; }
+
 .ghost-val {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--blue-hint);
     font-weight: 700;
     white-space: nowrap;
-    align-self: center;
 }
 /* Fixed data (Demographics) gets a subtle blue bg when filled by scraper */
 .scraped-fixed {
