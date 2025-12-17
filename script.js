@@ -1,13 +1,13 @@
 /* ===========================
-   1. Utilities & Configuration (Stable V4.9)
+   1. Utilities & Configuration (Stable V5.0)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v4.9_Stable';
-const ACCORDION_KEY = 'alertNursingToolAccordions_v4.9';
+const STORAGE_KEY = 'alertNursingToolData_v5.0';
+const ACCORDION_KEY = 'alertNursingToolAccordions_v5.0';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -68,21 +68,52 @@ function stackText(id, text) {
     el.dispatchEvent(new Event('input'));
 }
 
-function createDeviceEntry(type, value = '') {
+function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     const container = $('devices-container');
     const div = document.createElement('div');
     div.className = 'device-entry';
     div.dataset.type = type;
-    div.innerHTML = `
-        <label>${type}</label>
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <textarea style="flex: 1;" placeholder="Enter details...">${value}</textarea>
-            <div class="remove-entry" role="button" tabindex="0" style="cursor:pointer; color:var(--red); font-weight:700;">Remove</div>
-        </div>
-    `;
-    container.appendChild(div);
-    div.querySelector('textarea').addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
-    div.querySelector('.remove-entry').addEventListener('click', () => { div.remove(); computeAll(); saveState(); });
+
+    if (!isGhostCandidate) {
+        div.innerHTML = `
+            <label>${type}</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <textarea style="flex: 1;" placeholder="Enter details...">${value}</textarea>
+                <div class="remove-entry" role="button" tabindex="0" style="cursor:pointer; color:var(--red); font-weight:700;">Remove</div>
+            </div>
+        `;
+        container.appendChild(div);
+        div.querySelector('textarea').addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
+        div.querySelector('.remove-entry').addEventListener('click', () => { div.remove(); computeAll(); saveState(); });
+    } else {
+        // Confirm Device Box (Blue Dashed)
+        div.style.border = "2px dashed var(--blue-hint)";
+        div.style.padding = "8px";
+        div.style.marginBottom = "8px";
+        div.style.borderRadius = "6px";
+        div.style.backgroundColor = "rgba(0, 86, 179, 0.05)";
+        div.innerHTML = `
+            <div style="font-weight:bold; color:var(--blue-hint); margin-bottom:4px;">
+                ❓ Confirm Device: ${type}
+            </div>
+            <div style="margin-bottom:8px; font-size:0.9em;">${value}</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn small primary confirm-dev">Confirm</button>
+                <button class="btn small danger remove-dev">Ignore</button>
+            </div>
+        `;
+        container.appendChild(div);
+        div.querySelector('.confirm-dev').addEventListener('click', (e) => {
+             e.preventDefault();
+             div.remove();
+             createDeviceEntry(type, value, false);
+             computeAllAndSave();
+        });
+        div.querySelector('.remove-dev').addEventListener('click', (e) => {
+             e.preventDefault();
+             div.remove();
+        });
+    }
 }
 
 function getOxyDeviceText(s) {
@@ -97,7 +128,7 @@ function getOxyDeviceText(s) {
 }
 
 /* ===========================
-   3. The DMR Scraper (Safe Version)
+   3. The DMR Scraper (Updated for Fixed vs Ghost)
    =========================== */
 function processDmrNote() {
     const text = $('dmrPasteInput').value;
@@ -105,23 +136,35 @@ function processDmrNote() {
 
     $('pasteError').style.display = 'none';
 
-    // Helper: Fill value, Add Blue Class (Safe, no ghost elements)
-    const setScraped = (id, val) => {
+    // Clear previous ghosts
+    document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
+    document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
+
+    // Helper: Fill FIXED data (Input Box)
+    const setFixed = (id, val) => {
         const el = $(id);
         if(!el || !val) return;
         el.value = val;
-        el.classList.add('scraped-filled'); // Visual indicator only
+        el.classList.add('scraped-fixed'); // Blue bg
         el.dispatchEvent(new Event('input'));
+    };
+
+    // Helper: Set GHOST data (Blue Text, Input remains empty)
+    const setGhost = (id, val) => {
+        const ghostEl = document.getElementById('ghost_' + id);
+        if(ghostEl && val) {
+            ghostEl.textContent = val;
+        }
     };
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
-    // --- Demographics ---
+    // --- Fixed Data ---
     const los = extract(/LOS\s*(\d+)/i);
-    if(los) setScraped('icuLos', los);
+    if(los) setFixed('icuLos', los);
 
     const admission = extract(/Admitted post\s*(.*?)(?:\n|$|Not for)/i);
-    if(admission) setScraped('ptAdmissionReason', admission);
+    if(admission) setFixed('ptAdmissionReason', admission);
 
     const dateMatch = extract(/Discharged.*?on\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
     if(dateMatch) {
@@ -129,64 +172,54 @@ function processDmrNote() {
          if(parts.length === 3) {
              let d = parts[0], m = parts[1], y = parts[2];
              if(y.length === 2) y = "20" + y;
-             setScraped('stepdownDate', `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+             setFixed('stepdownDate', `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
          }
     }
 
-    const gocMatch = text.match(/(Not for CPR.*?(?:METS\.|For METS|for METS)|NFR.*?|For METS.*?)/i);
-    if (gocMatch) setScraped('goc_note', gocMatch[0].trim());
-
-    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|O\/E:|Social:|ADDS:)/i);
-    if(pmh) setScraped('pmh_note', pmh.trim());
-
-    // --- Vitals ---
-    const adds = extract(/ADDS[:\s]+(\d+)/i);
-    if(adds) { setScraped('adds', adds); setScraped('atoe_adds', adds); }
-
-    const hr = extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i);
-    if(hr) setScraped('c_hr', hr);
-
-    const bp = extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i);
-    if(bp) setScraped('c_nibp', bp);
-
-    const rr = extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i);
-    if(rr) setScraped('b_rr', rr);
-
-    const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(\d+%?)/i);
-    if(spo2) {
-        setScraped('b_spo2', spo2.replace('%',''));
-        if(/SpO2.*?RA|RA.*?SpO2|Room Air/i.test(text)) {
-            const btn = document.querySelector('#oxMod [data-value="RA"]');
-            if(btn) btn.click();
-        }
+    const timeMatch = extract(/Seen\s*(\d{4})/i);
+    if(timeMatch) {
+        const hour = parseInt(timeMatch.substring(0,2));
+        let timeVal = 'Morning';
+        if(hour >= 12 && hour < 17) timeVal = 'Afternoon';
+        else if(hour >= 17 && hour < 21) timeVal = 'Evening';
+        else if(hour >= 21 || hour < 6) timeVal = 'Night';
+        const btn = $(`stepdownTime`).querySelector(`[data-value="${timeVal}"]`);
+        if(btn) btn.click();
     }
 
-    const temp = extract(/(?:Temp|T)\s*[:]?\s*(\d+\.?\d*)/i);
-    if(temp) setScraped('e_temp', temp);
+    const gocMatch = text.match(/(Not for CPR.*?(?:METS\.|For METS|for METS)|NFR.*?|For METS.*?)/i);
+    if (gocMatch) setFixed('goc_note', gocMatch[0].trim());
 
-    // --- A-E ---
-    const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
-    if(airway) setScraped('airway_a', airway);
+    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|O\/E:|Social:|ADDS:)/i);
+    if(pmh) setFixed('pmh_note', pmh.trim());
 
-    const wob = extract(/(?:WOB|Work of breathing)[\s\S]{0,20}?(nil increased|increased|moderate|severe|normal)/i);
-    if(wob) setScraped('b_wob', wob);
+    // --- Variable Data (Ghosts) ---
+    const adds = extract(/ADDS[:\s]+(\d+)/i);
+    if(adds) setGhost('adds', adds);
 
-    const pain = extract(/D:\s*(.*?)(?:-|,|$|\n|E:)/i);
-    if(pain) setScraped('d_pain', pain);
+    // Vitals
+    /* Note: Vitals are often re-measured, so they are Ghosts now */
+    // Lactate is handled in Bloods loop usually, but check specific ID
+    const lact = extract(/Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i);
+    if(lact) setGhost('lactate', lact);
 
-    const bsl = extract(/BSL\s*[:]?\s*(\d+\.?\d*)/i);
-    if(bsl) setScraped('e_bsl', bsl);
+    // Check specific vital patterns
+    // HR, BP, etc are generally not scraped into specific boxes in this tool version except Bloods/Lactate/HB
+    // If you want them scraped to specific ghosts, add ghost spans to HTML.
+    // Based on HTML structure, we have ghosts for: Lactate, Hb, WCC, CRP, Bloods.
 
-    const diet = extract(/GIT:\s*(.*?)(?:SKIN|$|\n)/i);
-    if(diet) setScraped('ae_diet', diet);
+    const hb = extract(/Hb\s*[:]?\s*(\d+)/i);
+    if(hb) { setGhost('hb', hb); setGhost('bl_hb', hb); } // Fill both sections
 
-    const skin = extract(/SKIN:\s*(.*?)(?:Devices|$|\n)/i);
-    if(skin) setScraped('ae_mobility', skin);
+    const wcc = extract(/WCC\s*[:]?\s*(\d+\.?\d*)/i);
+    if(wcc) { setGhost('wcc', wcc); setGhost('bl_wcc', wcc); }
 
-    // --- Bloods ---
+    const crp = extract(/CRP\s*[:]?\s*(\d+)/i);
+    if(crp) { setGhost('crp', crp); setGhost('bl_crp', crp); }
+
+    // --- Bloods Loop ---
     const bloodMap = {
-        'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i, 'Hb': /Hb\s*[:]?\s*(\d+)/i,
-        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 'CRP': /CRP\s*[:]?\s*(\d+)/i,
+        'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i,
         'Cr': /Cr\s*[:]?\s*(\d+)/i, 'K': /K\s*[:]?\s*(\d+\.?\d*)/i,
         'Na': /Na\s*[:]?\s*(\d+)/i, 'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i,
         'Plts': /Plts\s*[:]?\s*(\d+)/i, 'Alb': /Alb\s*[:]?\s*(\d+)/i,
@@ -194,14 +227,14 @@ function processDmrNote() {
         'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i,
         'eGFR': /eGFR\s*[:]?\s*(\d+)/i
     };
-    const inputMap = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
+    const inputMap = { 'Lac': 'bl_lac_review', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
 
     for(const [label, regex] of Object.entries(bloodMap)) {
         const m = text.match(regex);
-        if(m && m[1]) setScraped(inputMap[label], m[1]);
+        if(m && m[1]) setGhost(inputMap[label], m[1]);
     }
 
-    // --- Devices (Simplified) ---
+    // --- Devices (Confirm Box) ---
     $('devices-container').innerHTML = ''; // Clear existing
     const parseAndAddDevice = (rawLine) => {
         if(!rawLine || rawLine.length < 3) return;
@@ -213,8 +246,8 @@ function processDmrNote() {
         else if(lower.includes('picc')) { type = 'PICC Line'; }
         else if(lower.includes('drain') || lower.includes('icc')) { type = 'Drain'; }
         else if(lower.includes('ng') || lower.includes('nj')) { type = 'Enteral Tube'; }
-        // Add directly
-        createDeviceEntry(type, rawLine.replace(/^[x\-\:\*]+\s*/, '').trim());
+        // Add as Ghost Candidate (True)
+        createDeviceEntry(type, rawLine.replace(/^[x\-\:\*]+\s*/, '').trim(), true);
     };
 
     const deviceBlock = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z][a-z]+:|$)/i);
@@ -228,49 +261,12 @@ function processDmrNote() {
     }
 
     $('dmrPasteWrapper').style.display = 'none';
-    showToast("Data Imported");
+    showToast("Data Imported: Fixed filled, Variable shown in blue");
     computeAllAndSave();
-    enableCompactMode(); // Trigger compact mode after import
 }
 
 /* ===========================
-   4. Compact Mode Logic
-   =========================== */
-function enableCompactMode() {
-    const cols = document.querySelectorAll('.grid > div[class*="col-"]');
-    cols.forEach(col => {
-        let hasData = false;
-        // Check Inputs
-        const inputs = col.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
-            if (input.type === 'checkbox' || input.type === 'radio') {
-                if (input.checked) hasData = true;
-            } else if (input.value && input.value.trim() !== '') {
-                hasData = true;
-            }
-        });
-        // Check Buttons
-        if (col.querySelector('.active')) hasData = true;
-        // Check Devices
-        if (col.id === 'devices-container' && col.children.length > 0) hasData = true;
-        // Check Accordions content
-        if(col.querySelector('.accordion-wrapper')) hasData = true; // Keep accordions visible
-
-        if (hasData) col.classList.remove('compact-hidden');
-        else col.classList.add('compact-hidden');
-    });
-    const expandBtn = $('expandFormBtn');
-    if(expandBtn) expandBtn.style.display = 'flex';
-}
-
-function disableCompactMode() {
-    document.querySelectorAll('.compact-hidden').forEach(el => el.classList.remove('compact-hidden'));
-    const expandBtn = $('expandFormBtn');
-    if(expandBtn) expandBtn.style.display = 'none';
-}
-
-/* ===========================
-   5. State & Persistence
+   4. State & Persistence
    =========================== */
 function showToast(msg, timeout=2500) {
   const t = $('toast');
@@ -328,6 +324,9 @@ function getState() {
 
   state.devices = {};
   document.querySelectorAll('.device-entry').forEach(div => {
+      // Don't save unconfirmed ghost devices
+      if(div.querySelector('.confirm-dev')) return;
+
       const type = div.dataset.type;
       const val = div.querySelector('textarea').value;
       if(!state.devices[type]) state.devices[type] = [];
@@ -409,7 +408,10 @@ function restoreState(state) {
 function clearAllDataSafe() {
     if (!confirm('Are you sure you want to clear all data?')) return;
     staticInputs.forEach(id => { const el = $(id); if(el) el.value = ''; });
-    document.querySelectorAll('.scraped-filled').forEach(el => el.classList.remove('scraped-filled'));
+    // Clear Ghosts & Fixed formatting
+    document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
+    document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
+
     $('devices-container').innerHTML = '';
     document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
     document.querySelectorAll('.seg-btn.active, .select-btn.active, .trend-btn.active, .toggle-label.active').forEach(btn => {
@@ -417,7 +419,6 @@ function clearAllDataSafe() {
         if(btn.classList.contains('toggle-label')) btn.dataset.value = 'false';
     });
     if($('dmrPasteInput')) $('dmrPasteInput').value = '';
-    disableCompactMode();
     $('mods_inputs').style.display = 'none';
     $('infectionMarkers').style.display = 'none';
     computeAllAndSave();
@@ -427,7 +428,6 @@ function initialize() {
   if($('clearDataBtnTop')) $('clearDataBtnTop').onclick = clearAllDataSafe;
   if($('clearDataBtnBottom')) $('clearDataBtnBottom').onclick = clearAllDataSafe;
   $('processPasteBtn').addEventListener('click', processDmrNote);
-  if($('expandFormBtn')) $('expandFormBtn').addEventListener('click', disableCompactMode);
 
   updateLastSaved();
   const debouncedComputeAndSave = debounce(()=>{ computeAll(); saveState(true); }, 600);
@@ -895,6 +895,72 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     if(s.chk_discharge_alert) text += "- Discharged from ALERT List\n";
 
     $('summary').value = text;
+}
+
+function openRedcapAccelerator() {
+    var roleVal = document.querySelector('input[name="clinicianRole"]:checked')?.value || "ALERT CNS";
+    var teamCode = (roleVal === "ALERT CN") ? "2" : "1";
+    var score = document.getElementById('adds').value || "0";
+    var isDischarge = document.getElementById('chk_discharge_alert').checked;
+
+    var wardMap = {
+        "3A": "1",  "3B": "2",  "3C": "5",  "3D": "3",
+        "4A": "6",  "4B": "7",  "4C": "8",  "4D": "9",
+        "5A": "10", "5B": "11", "5C": "12", "5D": "13",
+        "6A": "14", "6B": "15", "6C": "16", "6D": "17",
+        "7A": "18", "7B": "19", "7C": "20", "7D": "21",
+        "SRS2A": "59", "SRS1A": "58", "SRSA": "60", "SRSB": "61",
+        "ICU Pod 1": "43", "ICU Pod 2": "43", "ICU Pod 3": "43", "ICU Pod 4": "43",
+        "CCU": "30", "HDU": "41", "ED": "36",
+        "Short Stay": "57", "Transit Lounge": "64"
+    };
+    var currentWardName = document.getElementById('ptWard').value;
+    var locationCode = wardMap[currentWardName] || "";
+
+    var now = new Date();
+    var day = ("0" + now.getDate()).slice(-2);
+    var month = ("0" + (now.getMonth() + 1)).slice(-2);
+    var year = now.getFullYear();
+    var dateString = year + "-" + month + "-" + day;
+
+    var currentHour = now.getHours();
+    var currentMin = now.getMinutes();
+    var decimalTime = currentHour + (currentMin / 60);
+
+    var shiftCode = "3";
+    if (decimalTime >= 7.5 && decimalTime < 14.5) { shiftCode = "1"; }
+    else if (decimalTime >= 14.5 && decimalTime < 20.0) { shiftCode = "2"; }
+
+    var catText = document.getElementById('footerScore').innerText || "CAT 3";
+    var catCode = "3";
+    if (catText.includes("CAT 1")) { catCode = "1"; }
+    else if (catText.includes("CAT 2")) { catCode = "2"; }
+
+    var params = [];
+    params.push("site=1");
+    params.push("contactreason=6");
+    params.push("shifttype=" + shiftCode);
+    params.push("shift_date=" + dateString);
+    params.push("icu_category=" + catCode);
+    params.push("alert_team=" + teamCode);
+    if(locationCode) { params.push("location_fs=" + locationCode); }
+    params.push("adds_score=" + score);
+    params.push("int_group_a___1=1");
+    params.push("int_group_a___8=1");
+    params.push("int_group_b___19=1");
+    params.push("int_group_c___25=1");
+
+    if (isDischarge) {
+        params.push("outcome=1");
+        params.push("int_group_e___42=1");
+    } else {
+        params.push("outcome=3");
+        params.push("int_group_e___41=1");
+    }
+
+    var baseUrl = "https://datalibrary-rc.health.wa.gov.au/surveys/?s=K3WAPC4KKXWNTF3F";
+    var finalUrl = baseUrl + "&" + params.join("&");
+    window.open(finalUrl, '_blank');
 }
 
 document.addEventListener('DOMContentLoaded', ()=> initialize());
