@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v5.0</title>
+  <title>ALERT Nursing Risk Assessment Tool v5.1</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -42,7 +42,7 @@
       <div class="col-12" id="dmrPasteWrapper" style="display:none;">
           <div class="paste-box">
             <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Import Previous Note</div>
-            <label style="font-size:0.85rem;">Paste previous ALERT Summary here. <br><strong>Fixed data</strong> (Name, Ward, ICU LOS) will fill the boxes.<br><strong>Variable data</strong> (Bloods, Vitals) will appear as blue text <em>above</em> the inputs for reference.</label>
+            <label style="font-size:0.85rem;">Paste previous ALERT Summary here. <br><strong>Fixed data</strong> (Name, Ward, ICU LOS) will fill the boxes.<br><strong>Variable data</strong> (Bloods, Vitals, A-E) will appear as blue <strong>(prev: value)</strong> text next to labels.</label>
             <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:8px;">
                 <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
@@ -84,9 +84,10 @@
 
   <div class="card">
     <div class="question-row">
-        <div style="display:flex; justify-content:space-between;">
+        <div class="label-row">
             <div class="question-label">ADDS Score</div>
-            <span id="ghost_adds" class="ghost-val"></span> </div>
+            <span id="ghost_adds" class="ghost-val"></span>
+        </div>
         <div class="input-with-trend">
             <input id="adds" type="number" min="0" max="20" />
             <div class="trend-buttons" id="adds_trend"></div>
@@ -97,7 +98,7 @@
         <summary>Circulation & Sepsis</summary>
         <div class="risk-content">
             <div class="question-row">
-                <div style="display:flex; justify-content:space-between;">
+                <div class="label-row">
                     <div class="question-label">Lactate (mmol/L)</div>
                     <span id="ghost_lactate" class="ghost-val"></span>
                 </div>
@@ -107,7 +108,7 @@
             <div class="question-row">
                 <div class="grid">
                     <div class="col-6">
-                        <div style="display:flex; justify-content:space-between;">
+                        <div class="label-row">
                             <div class="question-label">Hb (g/L)</div>
                             <span id="ghost_hb" class="ghost-val"></span>
                         </div>
@@ -138,11 +139,11 @@
                     <label style="margin-bottom:8px; display:block; font-weight:600;">Optional: Enter Infection Markers</label>
                     <div class="grid">
                       <div class="col-4">
-                          <div style="display:flex; justify-content:space-between;"><label for="wcc">WCC</label><span id="ghost_wcc" class="ghost-val"></span></div>
+                          <div class="label-row"><label for="wcc">WCC</label><span id="ghost_wcc" class="ghost-val"></span></div>
                           <div style="position:relative"><input id="wcc" type="number" step="0.1" /><span id="wcc_range" class="range-annotation" style="left:0;"></span></div>
                       </div>
                       <div class="col-4">
-                          <div style="display:flex; justify-content:space-between;"><label for="crp">CRP</label><span id="ghost_crp" class="ghost-val"></span></div>
+                          <div class="label-row"><label for="crp">CRP</label><span id="ghost_crp" class="ghost-val"></span></div>
                           <div style="position:relative"><input id="crp" type="number" step="1" /><span id="crp_range" class="range-annotation" style="left:0;"></span></div>
                       </div>
                       <div class="col-4">
@@ -435,14 +436,14 @@
         <div class="col-12" id="adds_input_container"><label for="atoe_adds">ADDS</label><input id="atoe_adds" type="number"/></div>
 
         <div class="col-12">
-            <label for="airway_a">A: Airway</label>
+            <div class="label-row"><label for="airway_a">A: Airway</label><span id="ghost_airway_a" class="ghost-val"></span></div>
             <input id="airway_a" type="text" placeholder="" data-manual="false"/>
             <div class="quick-select-container">
                 <button type="button" class="btn small quick-select" data-target="airway_a" data-value="Patent">Patent</button>
             </div>
         </div>
         <div class="col-3">
-            <label for="b_rr">B: RR</label>
+            <div class="label-row"><label for="b_rr">B: RR</label><span id="ghost_b_rr" class="ghost-val"></span></div>
             <div class="input-with-trend">
                 <input id="b_rr" type="text" placeholder=""/>
                 <div class="trend-buttons" id="b_rr_trend"></div>
@@ -452,7 +453,7 @@
             </div>
         </div>
         <div class="col-3">
-            <label for="b_spo2">SpO2 (%)</label>
+            <div class="label-row"><label for="b_spo2">SpO2 (%)</label><span id="ghost_b_spo2" class="ghost-val"></span></div>
             <input id="b_spo2" type="text" placeholder=""/>
             <div class="quick-select-container">
                 <button type="button" class="btn small quick-select" data-target="b_spo2" data-value=">94%">SpO2 >94%</button>
@@ -460,10 +461,13 @@
         </div>
         <div class="col-3"><label for="b_device">Device</label><input id="b_device" type="text" placeholder="" data-manual="false"/></div>
         
-        <div class="col-3"><label for="b_wob">WOB</label><input id="b_wob" type="text" placeholder="Description..."/></div>
+        <div class="col-3">
+            <div class="label-row"><label for="b_wob">WOB</label><span id="ghost_b_wob" class="ghost-val"></span></div>
+            <input id="b_wob" type="text" placeholder="Description..."/>
+        </div>
 
         <div class="col-3">
-            <label for="c_hr">C: HR</label>
+            <div class="label-row"><label for="c_hr">C: HR</label><span id="ghost_c_hr" class="ghost-val"></span></div>
             <div class="input-with-trend">
                 <input id="c_hr" type="text" placeholder="Rate"/>
                 <div class="trend-buttons" id="c_hr_trend"></div>
@@ -475,7 +479,7 @@
             <input id="c_hr_rhythm" type="text" placeholder="Rhythm..." style="margin-top:4px;" />
         </div>
         <div class="col-3">
-            <label for="c_nibp">NIBP</label>
+            <div class="label-row"><label for="c_nibp">NIBP</label><span id="ghost_c_nibp" class="ghost-val"></span></div>
             <div class="input-with-trend">
                 <input id="c_nibp" type="text" placeholder=""/>
                 <div class="trend-buttons" id="c_nibp_trend"></div>
@@ -485,7 +489,7 @@
         <div class="col-3"><label for="c_perf">Perfusion</label><input id="c_perf" type="text" placeholder=""/></div>
 
         <div class="col-4">
-            <label for="d_alert">D: Alert?</label>
+            <div class="label-row"><label for="d_alert">D: Alert?</label><span id="ghost_d_alert" class="ghost-val"></span></div>
             <input id="d_alert" type="text" placeholder=""/>
              <div class="quick-select-container">
                 <button type="button" class="btn small quick-select" onclick="stackText('d_alert', 'Alert')">Alert</button>
@@ -494,23 +498,29 @@
             </div>
         </div>
         
-        <div class="col-4"><label for="d_pain">Pain</label><input id="d_pain" type="text" placeholder=""/></div>
+        <div class="col-4">
+            <div class="label-row"><label for="d_pain">Pain</label><span id="ghost_d_pain" class="ghost-val"></span></div>
+            <input id="d_pain" type="text" placeholder=""/>
+        </div>
         <div class="col-4"></div>
 
         <div class="col-4">
-            <label for="e_temp">E: Temp</label>
+            <div class="label-row"><label for="e_temp">E: Temp</label><span id="ghost_e_temp" class="ghost-val"></span></div>
             <input id="e_temp" type="text" placeholder=""/>
              <div class="quick-select-container">
                 <button type="button" class="btn small quick-select" data-target="e_temp" data-value="Afebrile">Afebrile</button>
             </div>
         </div>
-        <div class="col-4"><label for="e_bsl">BSL</label><input id="e_bsl" type="text" placeholder=""/></div>
+        <div class="col-4">
+            <div class="label-row"><label for="e_bsl">BSL</label><span id="ghost_e_bsl" class="ghost-val"></span></div>
+            <input id="e_bsl" type="text" placeholder=""/>
+        </div>
         <div class="col-4"><label for="e_uop">UOP</label><input id="e_uop" type="text" placeholder=""/></div>
 
         <div class="col-12"><hr></div>
         
         <div class="col-12">
-            <label for="ae_mobility">Mobility/MSK</label>
+            <div class="label-row"><label for="ae_mobility">Mobility/MSK</label><span id="ghost_ae_mobility" class="ghost-val"></span></div>
             <input id="ae_mobility" type="text" placeholder="Current mobility level"/>
             <div class="quick-select-container">
                 <button type="button" class="btn small quick-select" onclick="stackText('ae_mobility', 'Independent')">Independent</button>
@@ -521,7 +531,7 @@
         </div>
         
         <div class="col-12">
-            <label for="ae_diet">Diet</label>
+            <div class="label-row"><label for="ae_diet">Diet</label><span id="ghost_ae_diet" class="ghost-val"></span></div>
             <input id="ae_diet" type="text" placeholder="Current diet/fluids"/>
             <div class="quick-select-container">
                 <button type="button" class="btn small quick-select" onclick="stackText('ae_diet', 'Normal')">Normal</button>
