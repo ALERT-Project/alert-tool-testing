@@ -81,7 +81,6 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     } 
     // Ghost Candidate (Confirm/Remove)
     else {
-        // Styled via CSS (dashed border)
         div.style.borderStyle = "dashed"; 
         div.innerHTML = `
             <label>❓ Confirm Previous Device: ${type}</label>
@@ -140,15 +139,6 @@ function getAirwayDeviceText(s) {
     return airwayDeviceText.trim();
 }
 
-function stackText(id, text) {
-    const el = $(id);
-    let val = el.value;
-    if (val.includes(text)) return; 
-    if (val.length > 0) val += ', ';
-    el.value = val + text;
-    el.dispatchEvent(new Event('input'));
-}
-
 function initGhostSpans() {
     // For Bloods
     document.querySelectorAll('.blood-item').forEach(item => {
@@ -192,15 +182,16 @@ function setGhostValue(inputId, value) {
     el.classList.add('scraped-placeholder');
 }
 
-// === THE DMR PARSER ===
+// === UPDATED DMR PARSER FOR YOUR FORMAT ===
 function processDmrNote() {
     const text = $('dmrPasteInput').value;
-    if(!text || text.length < 10) return;
+    if(!text) return;
 
-    // Remove strict validation to allow non-standard notes
     $('pasteError').style.display = 'none';
 
+    // Helper: Extract text between a Start Phrase and End Phrase/Newline
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
+    
     const setScraped = (id, val) => {
         const el = $(id);
         if(el && val) { 
@@ -210,105 +201,79 @@ function processDmrNote() {
         }
     };
 
-    // 1. Demographics
-    const name = extract(/Patient:\s*(.*?)\s*\|/);
-    const mrn = extract(/URN:.*?(\d{3,})/);
-    const age = extract(/Age:\s*(\d+)/); 
-    const wardMatch = extract(/Location:\s*(.*?)\s*\|?/); 
-    
-    // Admission Reason: Try standard label, then "Admitted post", then "Diagnosis"
-    let admReason = extract(/Reason for ICU Admission:\s*(.*?)\n/);
-    if (!admReason) admReason = extract(/Admitted post\s*(.*?)\n/i);
-    if (!admReason) admReason = extract(/Diagnosis:\s*(.*?)\n/i);
-    
-    const stepdownDate = extract(/ICU Discharge Date:\s*(\d{2}\/\d{2}\/\d{4})/) || extract(/Discharged from ICU on\s*(\d{2}\/\d{2}\/\d{2,4})/);
-    const icuLos = extract(/ICU LOS:\s*(\d+)/) || extract(/LOS\s*(\d+)\s*day/i);
-    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|\n[A-Z])/);
-    const allergies = extract(/Allergies:\s*(.*?)\n/);
-    
-    // GOC: Try standard, then "Not for CPR", then "NFR"
-    let goc = extract(/GOC:\s*(.*?)\n/);
-    if(!goc) {
-        const nfrMatch = text.match(/(Not for CPR.*|NFR.*|For METS.*)/i);
-        if(nfrMatch) goc = nfrMatch[1].trim();
+    // 1. Demographics & GOC
+    // GOC (Matches "Not for CPR", "NFR", "For METS")
+    const gocMatch = text.match(/(Not for CPR.*?(?:METS\.|For METS|for METS)|NFR.*?|For METS.*?)/i);
+    if (gocMatch) setScraped('goc_note', gocMatch[0].trim());
+
+    // ADDS: 3
+    const adds = extract(/ADDS:\s*(\d+)/i);
+    if(adds) {
+        setScraped('adds', adds);
+        setScraped('atoe_adds', adds);
     }
 
-    const prevCat = extract(/ALERT Nursing Review Category - (CAT \d|CAT \d [A-Z]+)/);
-
-    setScraped('ptName', name);
-    if(mrn) setScraped('ptMrn', mrn.slice(-3));
-    if(age) setScraped('ptAge', age);
+    // 2. A-E Assessment (Matches specific "A:", "D:", "GIT:", "SKIN:")
     
-    if(wardMatch) {
-         const parts = wardMatch.split(' ');
-         if(parts.length > 0) {
-             const wardCode = parts[0];
-             const select = $('ptWard');
-             let found = false;
-             for(let i=0; i<select.options.length; i++){
-                 if(select.options[i].value === wardCode) {
-                     select.selectedIndex = i;
-                     found = true; 
-                     break;
-                 }
-             }
-             if(!found) {
-                 select.value = 'Other';
-                 $('ptWardOther').value = wardCode;
-                 updateWardOtherVisibility();
-             }
-             select.classList.add('scraped-data');
-             select.addEventListener('change', () => select.classList.remove('scraped-data'), {once:true});
-         }
-         if(parts.length > 1) setScraped('ptBed', parts[1]);
+    // A: Airway
+    const airway = extract(/A:\s*(.*?)(?:,|$|\n)/i);
+    if(airway) setScraped('airway_a', airway);
+
+    // WOB
+    const wob = extract(/,\s*(nil increased WOB noted|.*?WOB.*?)(?:,|$|\n)/i);
+    if(wob) setScraped('b_wob', wob);
+
+    // D: Pain
+    const pain = extract(/D:\s*(.*?)(?:-|,|$|\n)/i); // Captures "8/10 pain reported"
+    if(pain) setScraped('d_pain', pain);
+
+    // BSL
+    const bsl = extract(/BSL\s*(\d+\.?\d*)/i);
+    if(bsl) setScraped('e_bsl', bsl);
+
+    // GIT (Diet)
+    const diet = extract(/GIT:\s*(.*?)(?:SKIN|$|\n)/i);
+    if(diet) setScraped('ae_diet', diet);
+
+    // SKIN (Mobility/MSK)
+    const skin = extract(/SKIN:\s*(.*?)(?:Devices|$|\n)/i);
+    if(skin) setScraped('ae_mobility', skin);
+
+    // 3. Devices Section
+    $('devices-container').innerHTML = '';
+    
+    // Matches "Devices:" block or individual lines if pasted loosely
+    // We check for specific keywords in the whole text if a block isn't strictly defined
+    
+    // PIVC
+    const pivcMatch = extract(/(PIVC\s*x?\d*)/i);
+    if (pivcMatch) createDeviceEntry('PIVC', pivcMatch, true);
+
+    // CVL / CVC
+    if (/CVL|CVC/i.test(text)) createDeviceEntry('CVC', 'CVL Insitu', true);
+
+    // IDC
+    if (/IDC/i.test(text)) createDeviceEntry('IDC', 'IDC Insitu', true);
+
+    // Drains
+    const drains = extract(/(\d+\s*to\s*\d+\s*ICC drains.*?)(?:Bloods|$|\n)/i);
+    if (drains) createDeviceEntry('Drain', drains, true);
+
+    // Generic Devices Block fallback
+    const deviceSection = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i);
+    if (deviceSection) {
+        // If we found a block, parse lines we missed above
+        const lines = deviceSection[1].split('\n');
+        lines.forEach(line => {
+             const clean = line.trim();
+             if(!clean) return;
+             // Avoid duplicating if we already caught it via regex above
+             if(/PIVC|CVL|IDC|ICC/i.test(clean)) return;
+             createDeviceEntry('Other Device', clean, true);
+        });
     }
-    
-    setScraped('ptAdmissionReason', admReason);
-    setScraped('icuLos', icuLos);
-    
-    if(stepdownDate) {
-        const parts = stepdownDate.split('/');
-        if(parts.length === 3) {
-             let [d,m,y] = parts;
-             if(y.length === 2) y = "20" + y;
-             setScraped('stepdownDate', `${y}-${m}-${d}`);
-        }
-    }
-    
-    if(pmh) $('pmh_note').value = pmh.replace(/\n/g, ', ');
-    if(allergies) $('allergies_note').value = allergies;
-    if(goc) $('goc_note').value = goc;
 
-    if(prevCat) {
-        const catDiv = $('prevCategory');
-        catDiv.textContent = `Last review: ${prevCat}`;
-        catDiv.style.display = 'block';
-    }
-
-    // 2. Previous Vitals (A-E) - Robust Parsing
-    // Look for tool format first, then generic regex anywhere
-    let rr = extract(/B:.*?RR\s*(\d+(?:-\d+)?)/) || extract(/RR\s*(\d+(?:-\d+)?)/i);
-    let spo2 = extract(/B:.*?SpO2\s*(\d+)/) || extract(/SpO2\s*(\d+)/i);
-    let hr = extract(/C:.*?HR\s*(\d+)/) || extract(/HR\s*(\d+)/i); 
-    let bp = extract(/C:.*?NIBP\s*(\d+\/\d+)/) || extract(/BP\s*(\d+\/\d+)/i);
-    let temp = extract(/E:.*?Temp\s*([\d.]+)/) || extract(/T\s*(\d+\.?\d*)/i);
-    
-    if(rr) setGhostValue('b_rr', rr);
-    if(spo2) setGhostValue('b_spo2', spo2);
-    if(hr) setGhostValue('c_hr', hr);
-    if(bp) setGhostValue('c_nibp', bp);
-    if(temp) setGhostValue('e_temp', temp);
-
-    // Text fields
-    const airway = extract(/A:\s*(.*?)(?=\n|B:)/);
-    if(airway && !airway.toLowerCase().includes('patent')) setScraped('airway_a', airway);
-    
-    const mobility = extract(/Mobility\/MSK:\s*(.*?)\n/);
-    if(mobility) setScraped('ae_mobility', mobility);
-
-    // 3. Previous Bloods - Robust Parsing
-    // Match "Hb 86" or "Hb: 86" or "lact 1.8"
-    // We scan the whole text for these patterns
+    // 4. Bloods Section
     const bloodMap = { 
         'Lac': /Lac(?:tate)?\s*[:]?\s*(\d+\.?\d*)/i, 
         'Hb': /Hb\s*[:]?\s*(\d+)/i, 
@@ -333,92 +298,37 @@ function processDmrNote() {
         const m = text.match(regex);
         if(m && m[1]) {
             const inputId = inputMap[label];
-            if(inputId) setGhostValue(inputId, m[1]);
+            if(inputId) {
+                // Use setScraped for actual value, setGhostValue if you prefer it as a hint
+                // User asked for scraping, so let's put it in the box
+                setScraped(inputId, m[1]);
+                // Also trigger sync for core bloods
+                if(inputId === 'bl_hb') $('hb').value = m[1];
+                if(inputId === 'bl_lac_review') $('lactate').value = m[1];
+            }
         }
     }
 
-    // 4. Historical Risk Parsing
-    document.querySelectorAll('.prev-risk-text').forEach(el => { el.textContent = ''; el.style.display='none'; });
-    
-    // Try standard risk section
-    let riskLines = [];
-    const riskSection = text.match(/IDENTIFIED RISK FACTORS:\n([\s\S]*?)(?=\n\n|\nPLAN:|$)/);
-    if(riskSection) {
-        riskLines = riskSection[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('-'));
-    } else {
-        // Fallback: Check Plan or other notes for keywords if standard section missing
-        // This is harder to do safely without false positives, so we rely on standard section for now.
-    }
-    
-    riskLines.forEach(line => {
-        const cleanLine = line.replace(/^-\s*/, '').replace(/^\[.*?\]\s*/, ''); 
-        const displayTx = `Last review: ${cleanLine}`;
-        
-        if(cleanLine.match(/Renal/i)) showPrevRisk('prev_renal_info', displayTx);
-        else if(cleanLine.match(/Respiratory|Airway|Dyspnea/i)) showPrevRisk('prev_resp_info', displayTx);
-        else if(cleanLine.match(/Neuro/i)) showPrevRisk('prev_neuro_info', displayTx);
-        else if(cleanLine.match(/Infection|Sepsis|WCC|CRP/i)) showPrevRisk('prev_inf_info', displayTx);
-        else if(cleanLine.match(/Vasopressor|Shock/i)) showPrevRisk('prev_pressor_info', displayTx);
-        else if(cleanLine.match(/Hb|Anemia/i)) showPrevRisk('prev_hb_info', displayTx);
-        else if(cleanLine.match(/UOP/i)) showPrevRisk('uop_note_wrapper', displayTx); // Special case
-        else if(cleanLine.match(/Electrolyte/i)) showPrevRisk('prev_elec_info', displayTx);
-        else if(cleanLine.match(/Immobility/i)) showPrevRisk('prev_immob_info', displayTx);
-        else if(cleanLine.match(/ADDS/i)) showPrevRisk('prev_adds_info', displayTx);
-        else if(cleanLine.match(/Lactate/i)) showPrevRisk('prev_lac_info', displayTx);
-        else if(cleanLine.match(/Comorbid/i)) showPrevRisk('prev_comorb_info', displayTx);
-        else if(cleanLine.match(/Wean/i)) showPrevRisk('prev_wean_info', displayTx);
-        else if(cleanLine.match(/Intubat/i)) showPrevRisk('prev_tubed_info', displayTx);
-        else if(cleanLine.match(/Historical O2/i)) showPrevRisk('prev_hist_o2_info', displayTx);
-    });
+    // Electrolyte Replacement Plan
+    const lytesPlan = extract(/(electrolytes replaced.*?)(?:Morning|$|\n)/i);
+    if(lytesPlan) setScraped('elec_replace_note', lytesPlan);
 
-    // 5. Devices (Ghost)
-    $('devices-container').innerHTML = '';
-    
-    // Strategy: Look for "DEVICES:" block, otherwise look for keywords globally
-    let deviceText = '';
-    const deviceSection = text.match(/DEVICES:\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i) || text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i);
-    
-    if(deviceSection) {
-        // Standard block parsing
-        const lines = deviceSection[1].split('\n');
-        lines.forEach(line => {
-            line = line.trim();
-            if(line) {
-                 // Remove list markers if present
-                 const raw = line.replace(/^- /, '').trim();
-                 // Determine type
-                 let type = raw; 
-                 let details = '';
-                 
-                 // Check for "Type (Details)" format
-                 const parenIndex = raw.indexOf('(');
-                 if(parenIndex > -1) {
-                    type = raw.substring(0, parenIndex).trim();
-                    details = raw.substring(parenIndex+1, raw.lastIndexOf(')')).trim();
-                 } else {
-                    // Check for "Type - Details" format
-                    const dashIndex = raw.indexOf('-');
-                    if(dashIndex > 0) { // >0 to avoid leading dashes
-                        type = raw.substring(0, dashIndex).trim();
-                        details = raw.substring(dashIndex+1).trim();
-                    }
-                 }
-                 
-                 const knownType = deviceTypes.find(t => type.toLowerCase().includes(t.toLowerCase()));
-                 // If line is just "CVL" or "PIVC x2"
-                 if (!knownType) {
-                     // Check if the raw string matches a known type directly
-                     const directMatch = deviceTypes.find(t => raw.toLowerCase().includes(t.toLowerCase()));
-                     if(directMatch) createDeviceEntry(directMatch, raw, true);
-                     else createDeviceEntry('Other Device', raw, true);
-                 } else {
-                     createDeviceEntry(knownType, details || raw, true);
-                 }
-            }
-        });
+    // New Bloods Ordered
+    if (/Morning blood form requested/i.test(text)) {
+        const segGroup = $('seg_new_bloods_ordered');
+        if(segGroup) {
+            const btn = segGroup.querySelector('[data-value="true"]');
+            if(btn) btn.click();
+        }
     }
 
-    // 6. Force Open Bloods
+    // MODS Checkbox
+    if (/Modifications for/i.test(text)) {
+        $('chk_use_mods').checked = true;
+        $('chk_use_mods').dispatchEvent(new Event('change'));
+    }
+
+    // Force Open Bloods Accordion
     const bloodsDetails = document.querySelector('details[data-accordion-id="bloods"]');
     if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); 
 
