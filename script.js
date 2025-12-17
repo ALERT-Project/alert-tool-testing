@@ -1,13 +1,13 @@
 /* ===========================
-   1. Utilities & Configuration (Stable V5.1)
+   1. Utilities & Configuration (Stable V5.2)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.1';
-const ACCORDION_KEY = 'alertNursingToolAccordions_v5.1';
+const STORAGE_KEY = 'alertNursingToolData_v5.2';
+// Accordion key removed as main sections are now flat
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -127,19 +127,8 @@ function getOxyDeviceText(s) {
     return t.trim();
 }
 
-function getAirwayDeviceText(s) {
-    let airwayDeviceText = '';
-    if (s.oxMod === 'Trache') {
-        const tracheType = s.tracheType;
-        airwayDeviceText = !tracheType ? 'Altered Airway' : tracheType;
-        const details = s.trache_details_note ? s.trache_details_note.trim() : '';
-        if (details) airwayDeviceText += ` (${details})`;
-    }
-    return airwayDeviceText.trim();
-}
-
 /* ===========================
-   3. The DMR Scraper (Updated for Fixed vs Ghost)
+   3. The DMR Scraper (Fixed vs Ghost)
    =========================== */
 function processDmrNote() {
     const text = $('dmrPasteInput').value;
@@ -224,7 +213,6 @@ function processDmrNote() {
     const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(\d+%?)/i);
     if(spo2) {
         setGhost('b_spo2', spo2.replace('%',''));
-        // Also check RA logic if needed, but keeping it simpler as per ghost request
     }
 
     const temp = extract(/(?:Temp|T)\s*[:]?\s*(\d+\.?\d*)/i);
@@ -564,8 +552,7 @@ function initialize() {
       panel.style.display = open ? 'block' : 'none';
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       btn.querySelector('.icon').textContent = open ? '[-]' : '[+]';
-      const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
-      maps[id] = open; localStorage.setItem(ACCORDION_KEY, JSON.stringify(maps));
+      // LocalStorage removed for deleted accordions
     });
   });
 
@@ -592,13 +579,17 @@ function initialize() {
   if (saved) restoreState(saved);
 
   toggleOxyFields(); toggleInfusionsBox(); toggleNeuroFields();
-  const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
-  document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
-      if (maps[wrapper.dataset.accordionId]) {
-          wrapper.querySelector('.panel').style.display = 'block';
-          wrapper.querySelector('.accordion').setAttribute('aria-expanded','true');
-      }
-  });
+  
+  // Re-open helper accordions if saved
+  if(localStorage.getItem(ACCORDION_KEY)) {
+     const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
+      document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
+          if (maps[wrapper.dataset.accordionId]) {
+              wrapper.querySelector('.panel').style.display = 'block';
+              wrapper.querySelector('.accordion').setAttribute('aria-expanded','true');
+          }
+      });
+  }
 
   computeAll();
 }
@@ -630,10 +621,6 @@ function handleSegmentClick(id, value, btnClicked) {
 function updateLayoutMode(mode) {
     const isFollowUp = (mode === 'followup');
     $('dmrPasteWrapper').style.display = isFollowUp ? 'block' : 'none';
-    // If followup selected, open main sections to allow copy/paste
-    if(isFollowUp) {
-         document.querySelectorAll('details.risk-section').forEach(d => d.setAttribute('open', 'true'));
-    }
 }
 
 function updateWardOptions() {
@@ -710,7 +697,6 @@ function computeAll() {
   const s = getState();
   
   // Auto-populate A-E inputs from ghost values if manual entry hasn't occurred
-  // This helps ensure the summary has data even if user doesn't type into empty box
   const airwayEl = $('airway_a');
   if (airwayEl.dataset.manual !== "true" && airwayEl.value === "") {
       const ghost = $('ghost_airway_a')?.textContent;
@@ -874,7 +860,12 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     const trendWord = val => ({ '↑': ' (uptrending)', '↓':' (downtrending)', '→':' (stable)'}[val] || '');
 
     const role = s.clinicianRole || 'ALERT CNS';
-    const reviewTitle = (s.reviewType === 'post') ? `${role} post ICU review` : `${role} pre ICU stepdown review`;
+    
+    // UPDATED REVIEW TITLE LOGIC
+    // Both 'post' AND 'followup' use the Post ICU Review format
+    const reviewTitle = (s.reviewType === 'pre') 
+        ? `${role} pre ICU stepdown review` 
+        : `${role} post ICU review`;
 
     const headerLines = [];
     const ptDetails = [];
@@ -898,7 +889,9 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     }
 
     const stepdownParts = [];
-    if (s.reviewType === 'post' && wardTimeText) stepdownParts.push(`Time since stepdown: ${wardTimeText}.`);
+    // Only show "Time since stepdown" if we are NOT in pre-mode.
+    // 'post' and 'followup' both show this.
+    if (s.reviewType !== 'pre' && wardTimeText) stepdownParts.push(`Time since stepdown: ${wardTimeText}.`);
     if (s.icuLos) stepdownParts.push(`ICU LOS: ${s.icuLos} days.`);
     if (stepdownParts.length) headerLines.push('', ...stepdownParts);
 
