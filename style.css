@@ -258,3 +258,25 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
     border-color: var(--accent);
     color: var(--accent);
 }
+/* --- Scraped Data Styling --- */
+/* Makes text inside the input blue and bold if scraped */
+.scraped-filled {
+    color: var(--blue-hint) !important;
+    font-weight: 700 !important;
+    background-color: rgba(37, 99, 235, 0.04) !important;
+    border-color: var(--blue-hint) !important;
+}
+
+/* The text under the label (Ghost hint) */
+.scraped-hint-text {
+    color: var(--blue-hint);
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+    display: block;
+}
+
+/* Ensure placeholder text is distinct if needed */
+.scraped-filled::placeholder {
+    color: rgba(37, 99, 235, 0.4);
+}
