@@ -61,7 +61,7 @@ const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'PICC Line', 'Enteral Tube', '
    2. DOM & UI Helpers (Ghost/Hint System)
    =========================== */
 
-// Create the blue text under the input box
+// Insert the blue text BEFORE the input (between Label and Box)
 function setGhostValue(inputId, value) {
     const el = $(inputId);
     if (!el || !value) return;
@@ -74,21 +74,21 @@ function setGhostValue(inputId, value) {
         hint = document.createElement('div');
         hint.id = hintId;
         hint.className = 'scraped-hint-text';
-        // Inline styles to ensure it looks right immediately
+        
+        // Inline styles for direct placement
         hint.style.color = 'var(--blue-hint, #0056b3)';
         hint.style.fontSize = '0.85em';
+        hint.style.fontWeight = '700';
+        hint.style.marginBottom = '2px';
         hint.style.marginTop = '2px';
-        hint.style.fontWeight = '600';
-        hint.style.marginBottom = '8px';
+        hint.style.display = 'block'; // Forces it to be on its own line
+        hint.style.width = '100%';    // Ensures it spans the width
         
-        // Insert directly after the input element
-        if(el.nextSibling) {
-            el.parentNode.insertBefore(hint, el.nextSibling);
-        } else {
-            el.parentNode.appendChild(hint);
-        }
+        // Insert BEFORE the input element (This puts it under the label)
+        el.parentNode.insertBefore(hint, el);
     }
-    hint.textContent = `Scraped: ${value}`;
+    // Just the value, no "Scraped:" text
+    hint.textContent = value;
     hint.style.display = 'block';
 }
 
@@ -261,13 +261,14 @@ function processDmrNote() {
     // 4. Devices (Smart Parsing)
     $('devices-container').innerHTML = '';
     
+    // Logic to identify device type
     const parseAndAddDevice = (rawLine) => {
         if(!rawLine) return;
         const lower = rawLine.toLowerCase();
         let type = 'Other Device';
         let details = rawLine;
 
-        // Type Detection
+        // Strict Type Detection
         if(lower.includes('pivc')) { type = 'PIVC'; details = rawLine.replace(/PIVC/i, '').trim(); }
         else if(lower.includes('cvl') || lower.includes('cvc')) { type = 'CVC'; details = rawLine.replace(/CV(L|C)/i, '').trim(); }
         else if(lower.includes('idc')) { type = 'IDC'; details = rawLine.replace(/IDC/i, '').trim(); }
@@ -282,24 +283,25 @@ function processDmrNote() {
         createDeviceEntry(type, details, true);
     };
 
-    // Specific Regex Checks
-    const pivcMatch = extract(/(PIVC\s*x?\d*.*)/i); 
-    if (pivcMatch) parseAndAddDevice(pivcMatch);
-    if (/CVL|CVC/i.test(text)) parseAndAddDevice("CVC Insitu");
-    if (/IDC/i.test(text)) parseAndAddDevice("IDC Insitu");
-    const drains = extract(/(\d+\s*to\s*\d+\s*ICC drains.*?)(?:Bloods|$|\n)/i);
-    if (drains) parseAndAddDevice("Drain " + drains);
-
-    // Block Parse (Devices:)
+    // A. Parse the main "Devices:" block line-by-line (Most reliable)
     const deviceSection = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i);
     if (deviceSection) {
         const lines = deviceSection[1].split('\n');
         lines.forEach(line => {
              const clean = line.trim().replace(/^-/, '').trim();
-             if(clean && !/PIVC|CVL|IDC|ICC/i.test(clean)) {
-                 parseAndAddDevice(clean);
-             }
+             if(clean) parseAndAddDevice(clean);
         });
+    }
+
+    // B. Fallback: Specific Regex Checks (If block was missing or empty)
+    // We check if devices-container is empty or if we want to catch stray mentions
+    if($('devices-container').children.length === 0) {
+        const pivcMatch = extract(/(PIVC\s*x?\d*.*)/i); 
+        if (pivcMatch) parseAndAddDevice(pivcMatch);
+        if (/CVL|CVC/i.test(text)) parseAndAddDevice("CVC Insitu");
+        if (/IDC/i.test(text)) parseAndAddDevice("IDC Insitu");
+        const drains = extract(/(\d+\s*to\s*\d+\s*ICC drains.*?)(?:Bloods|$|\n)/i);
+        if (drains) parseAndAddDevice("Drain " + drains);
     }
 
     // 5. Misc
@@ -320,7 +322,7 @@ function processDmrNote() {
     if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); 
 
     $('dmrPasteWrapper').style.display = 'none'; 
-    showToast("Data Scraped (Check blue text under boxes)");
+    showToast("Data Scraped");
     computeAllAndSave();
 }
 
@@ -755,17 +757,27 @@ function initialize() {
     });
   });
   
-  // Quick Selects (Fixed)
-  document.querySelectorAll('.quick-select').forEach(btn => {
-      if(btn.id.includes('btn_b')) return; // skip bowel buttons handled above
-      btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const targetEl = $(btn.dataset.target);
-          if (targetEl) {
-              targetEl.value = btn.dataset.value;
-              targetEl.dispatchEvent(new Event('input'));
-          }
-      });
+  // GLOBAL QUICK SELECT LISTENER (Fix for your buttons)
+  // Replaces specific handlers with one global delegation handler
+  document.body.addEventListener('click', (e) => {
+      const btn = e.target.closest('.quick-select');
+      if (!btn || btn.id.includes('btn_b')) return; // Ignore bowel buttons (handled separately)
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const targetId = btn.dataset.target;
+      const val = btn.dataset.value;
+      const targetEl = $(targetId);
+
+      if (targetEl) {
+          targetEl.value = val;
+          targetEl.dispatchEvent(new Event('input')); // Trigger save/compute
+          
+          // Optional: Add visual click feedback
+          btn.style.opacity = "0.5";
+          setTimeout(() => btn.style.opacity = "1", 100);
+      }
   });
 
   document.querySelectorAll('#panel_devices .btn[data-device-type]').forEach(button => {
@@ -1295,179 +1307,6 @@ function computeAll() {
   scoreEl.textContent = `${cat.text}${flagCount>0 ? ` (${flagCount} Flag${flagCount>1?'s':''})` : ''}`;
 
   generateSummary(s, cat, location, wardTime.text, red, amber);
-}
-
-function generateSummary(s, cat, location, timeOnWardText, red, amber) {
-  const clean = (str) => str ? str.trim().replace(/\.$/, '').trim() : null;
-  const trendWord = val => ({ '↑': ' (uptrending)', '↓':' (downtrending)', '→':' (stable)'}[val] || '');
-  
-  const role = s.clinicianRole || 'ALERT CNS';
-  const reviewTitle = (s.reviewType === 'post' || s.reviewType === 'followup') ? `${role} post ICU review` : `${role} pre ICU stepdown review`;
-  
-  const headerLines = [];
-  const ptDetails = [];
-  if (s.ptName) ptDetails.push(`Patient: ${s.ptName}`);
-  if (s.ptMrn) ptDetails.push(`URN: ...${s.ptMrn}`);
-  if (s.ptAge) ptDetails.push(`Age: ${s.ptAge}`);
-  if (location) ptDetails.push(`Location: ${location}`);
-  if (ptDetails.length) headerLines.push(ptDetails.join(' | '));
-  
-  headerLines.push(reviewTitle, `Time of review: ${getRoundedTime()}`);
-  
-  if (s.stepdownDate) headerLines.push(`ICU Discharge Date: ${formatDateAUS(s.stepdownDate)}`);
-
-  const stepdownParts = [];
-  if (s.reviewType !== 'pre' && timeOnWardText) stepdownParts.push(`Time since stepdown: ${timeOnWardText}.`);
-  if (s.icuLos) stepdownParts.push(`ICU LOS: ${s.icuLos} days.`);
-  if (stepdownParts.length) headerLines.push('', ...stepdownParts);
-  
-  if(s.ptAdmissionReason) headerLines.push(`Reason for ICU Admission: ${s.ptAdmissionReason}`);
-  
-  const lines = [...headerLines, '', `ALERT Nursing Review Category - ${cat.text}`];
-  if (s.pmh_note && s.pmh_note.trim()) lines.push('', 'PMH:', s.pmh_note.trim());
-  
-  const atoe = [];
-  if (s.chk_use_mods === true) {
-      const modsParts = [];
-      if(s.mods_score) modsParts.push(`MODS Score: ${s.mods_score}`);
-      if(s.mods_details) modsParts.push(`Details: ${s.mods_details}`);
-      if(modsParts.length > 0) atoe.push(modsParts.join(' | '));
-  } else if(s.adds) {
-      let addsStr = `ADDS: ${s.adds}`;
-      if(s.adds_trend) addsStr += ` (Trend: ${s.adds_trend})`;
-      atoe.push(addsStr);
-  }
-  
-  if (s.airway_a) atoe.push(`A: ${s.airway_a.trim()}`);
-  
-  const b_parts = [
-    clean(s.b_rr) ? `RR ${clean(s.b_rr)}${trendWord(s.b_rr_trend)}`:null, 
-    clean(s.b_spo2) ? `SpO2 ${clean(s.b_spo2)}${clean(s.b_spo2).includes('%') ? '' : '%'}`:null, 
-    clean(s.b_device),
-    clean(s.b_wob) ? `WOB ${clean(s.b_wob)}`:null
-  ];
-  if(b_parts.filter(Boolean).length) atoe.push(`B: ${b_parts.filter(Boolean).join(', ')}`);
-  
-  let hrString = clean(s.c_hr) ? `HR ${clean(s.c_hr)}${trendWord(s.c_hr_trend)}`:null;
-  if (hrString && s.c_hr_rhythm) hrString += ` (${s.c_hr_rhythm})`;
-  
-  const c_parts = [
-    hrString, 
-    clean(s.c_nibp) ? `NIBP ${clean(s.c_nibp)}${trendWord(s.c_nibp_trend)}`:null, 
-    clean(s.c_cr) ? `Cap Refill ${clean(s.c_cr)}`:null, 
-    clean(s.c_perf)
-  ];
-  if(c_parts.filter(Boolean).length) atoe.push(`C: ${c_parts.filter(Boolean).join(', ')}`);
-  
-  const d_parts = [];
-  if(s.d_alert && s.d_alert.trim()) d_parts.push(s.d_alert.trim());
-  if(s.d_pain && s.d_pain.trim()) d_parts.push(`Pain ${s.d_pain.trim()}`);
-  if(d_parts.length) atoe.push(`D: ${d_parts.join(', ')}`);
-  
-  const e_parts = [
-    clean(s.e_temp) ? `Temp ${clean(s.e_temp)}${String(clean(s.e_temp)).toLowerCase().match(/febrile|afebrile|C/) ? '' : 'C'}`:null, 
-    clean(s.e_bsl) ? `BSL ${clean(s.e_bsl)}`:null, 
-    clean(s.e_uop) ? `UOP ${clean(s.e_uop)}`:null
-  ];
-  if(e_parts.filter(Boolean).length) atoe.push(`E: ${e_parts.filter(Boolean).join(', ')}`);
-  
-  const otherSys = [];
-  if (s.ae_mobility) otherSys.push(`Mobility/MSK: ${s.ae_mobility.trim()}`);
-  if (s.ae_diet) otherSys.push(`Diet: ${s.ae_diet.trim()}`);
-  
-  let bowelStr = s.ae_bowels ? s.ae_bowels.trim() : '';
-  if (s.bowel_mode === 'btn_bno' && s.bowel_date) {
-      const date = formatDateAUS(s.bowel_date);
-      bowelStr = bowelStr ? `BNO (Last opened: ${date}), ${bowelStr}` : `BNO (Last opened: ${date})`;
-      if (s.chk_aperients) bowelStr += ' (Aperients charted)';
-  } else if (s.bowel_mode === 'btn_bo' && s.bowel_date) {
-      const date = formatDateAUS(s.bowel_date);
-      bowelStr = bowelStr ? `BO (Date: ${date}), ${bowelStr}` : `BO (Date: ${date})`;
-  } else if (s.bowel_mode === 'btn_bno') {
-      bowelStr = bowelStr ? `BNO, ${bowelStr}` : `BNO`;
-      if (s.chk_aperients) bowelStr += ' (Aperients charted)';
-  } else if (s.bowel_mode === 'btn_bo') {
-      bowelStr = bowelStr ? `BO, ${bowelStr}` : `BO`;
-  }
-  
-  if (bowelStr) otherSys.push(`Bowels: ${bowelStr}`);
-  
-  if (atoe.length || otherSys.length) {
-      lines.push('', 'A-E ASSESSMENT', ...atoe);
-      if(atoe.length && otherSys.length) lines.push('---');
-      lines.push(...otherSys);
-  }
-
-  const bloodLines = [];
-  const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4', 'urea': 'Urea', 'egfr': 'eGFR' };
-  const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','urea','egfr','plts','alb','neut','lymph'];
-  
-  const bloods = bloodParts.map(k => {
-    const v = s[`bl_${k}`]; if (!v) return null;
-    const trend = s[`bl_${k}_trend`] || '';
-    return `${bloodLabelMap[k]} ${v}${trendWord(trend)}`;
-  }).filter(Boolean).join(', ');
-
-  let fullBloodLine = bloods;
-  if (s.new_bloods_ordered === true) fullBloodLine += `${bloods ? ' ' : ''}(new bloods ordered for next round.)`;
-  
-  if (fullBloodLine) bloodLines.push(`Bloods: ${fullBloodLine}`);
-  if (s.elec_replace_note) bloodLines.push(`Electrolyte Plan: ${s.elec_replace_note.trim()}`);
-  if (bloodLines.length) lines.push('', ...bloodLines);
-  
-  if (s.reviewType === 'pre' && s.infusions_note && s.infusions_note.trim()) {
-      lines.push(`Infusions: ${s.infusions_note.trim()}`);
-  }
-  
-  if(s.devices) {
-      const devLines = [];
-      deviceTypes.forEach(type => {
-        if(s.devices[type] && s.devices[type].length) {
-            s.devices[type].forEach(d => {
-                const det = d ? d.trim() : '';
-                if(type === 'Other CVAD' || type === 'Other Device') {
-                    devLines.push(det || type);
-                } else {
-                    devLines.push(det ? `${type} (${det})` : type);
-                }
-            });
-        }
-      });
-      if(devLines.length) lines.push('', 'DEVICES:', ...devLines.map(d=>'- '+d));
-  }
-  
-  const contextLines = [];
-  if (s.hb_dropping_note && s.hb_dropping === true) {
-      contextLines.push(`Hb Plan: ${s.hb_dropping_note.trim()}`);
-  }
-  if (s.goc_note) {
-    const gocText = s.goc_note.trim();
-    contextLines.push(gocText.toLowerCase().startsWith('goc') ? gocText : `GOC: ${gocText}`);
-  }
-  if (s.allergies_note) contextLines.push(`Allergies: ${s.allergies_note.trim()}`);
-  if (s.pics_note) contextLines.push(`Post ICU Syndrome: ${s.pics_note.trim()}`);
-  if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
-  if (contextLines.length) lines.push('', ...contextLines);
-  
-  const allFlags = [...red, ...amber];
-  if (allFlags.length) lines.push('', 'IDENTIFIED RISK FACTORS:', ...allFlags.map(f=>'- '+f));
-  
-  lines.push('', 'PLAN:');
-  if (s.chk_discharge_alert === true) {
-      lines.push('- Follow-up: Discharge from ALERT nursing post ICU review list.');
-  } else if (cat.id === 'red') {
-      lines.push(`- Follow-up: ${red.length >= 3 ? 'Twice-daily' : 'At least daily'} ALERT review for up to 72h post-ICU stepdown.`);
-  } else if (cat.id === 'amber') {
-      lines.push('- Follow-up: Once-daily ALERT review for up to 48h post-ICU stepdown.');
-  } else {
-      lines.push('- Follow-up: Single ALERT review on ward to ensure continued stability.');
-  }
-  
-  if (s.chk_medical_rounding) {
-      lines.push('- Added to ALERT Medical Rounding List.');
-  }
-
-  $('summary').value = lines.join('\n');
 }
 
 /* ===========================
