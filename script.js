@@ -1,13 +1,13 @@
 /* ===========================
-   1. Utilities & Configuration (Stable V5.0)
+   1. Utilities & Configuration (Stable V5.1)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.0';
-const ACCORDION_KEY = 'alertNursingToolAccordions_v5.0';
+const STORAGE_KEY = 'alertNursingToolData_v5.1';
+const ACCORDION_KEY = 'alertNursingToolAccordions_v5.1';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -91,7 +91,7 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
         div.style.padding = "8px";
         div.style.marginBottom = "8px";
         div.style.borderRadius = "6px";
-        div.style.backgroundColor = "rgba(0, 86, 179, 0.05)";
+        div.style.backgroundColor = "rgba(37, 99, 235, 0.05)";
         div.innerHTML = `
             <div style="font-weight:bold; color:var(--blue-hint); margin-bottom:4px;">
                 ❓ Confirm Device: ${type}
@@ -127,6 +127,17 @@ function getOxyDeviceText(s) {
     return t.trim();
 }
 
+function getAirwayDeviceText(s) {
+    let airwayDeviceText = '';
+    if (s.oxMod === 'Trache') {
+        const tracheType = s.tracheType;
+        airwayDeviceText = !tracheType ? 'Altered Airway' : tracheType;
+        const details = s.trache_details_note ? s.trache_details_note.trim() : '';
+        if (details) airwayDeviceText += ` (${details})`;
+    }
+    return airwayDeviceText.trim();
+}
+
 /* ===========================
    3. The DMR Scraper (Updated for Fixed vs Ghost)
    =========================== */
@@ -153,7 +164,7 @@ function processDmrNote() {
     const setGhost = (id, val) => {
         const ghostEl = document.getElementById('ghost_' + id);
         if(ghostEl && val) {
-            ghostEl.textContent = val;
+            ghostEl.textContent = `(prev: ${val})`;
         }
     };
 
@@ -197,29 +208,51 @@ function processDmrNote() {
     const adds = extract(/ADDS[:\s]+(\d+)/i);
     if(adds) setGhost('adds', adds);
 
-    // Vitals
-    /* Note: Vitals are often re-measured, so they are Ghosts now */
-    // Lactate is handled in Bloods loop usually, but check specific ID
+    // Vitals & A-E (Now correctly targeting ghost IDs)
     const lact = extract(/Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i);
-    if(lact) setGhost('lactate', lact);
+    if(lact) { setGhost('lactate', lact); setGhost('bl_lac_review', lact); }
 
-    // Check specific vital patterns
-    // HR, BP, etc are generally not scraped into specific boxes in this tool version except Bloods/Lactate/HB
-    // If you want them scraped to specific ghosts, add ghost spans to HTML.
-    // Based on HTML structure, we have ghosts for: Lactate, Hb, WCC, CRP, Bloods.
+    const hr = extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i);
+    if(hr) setGhost('c_hr', hr);
 
-    const hb = extract(/Hb\s*[:]?\s*(\d+)/i);
-    if(hb) { setGhost('hb', hb); setGhost('bl_hb', hb); } // Fill both sections
+    const bp = extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i);
+    if(bp) setGhost('c_nibp', bp);
 
-    const wcc = extract(/WCC\s*[:]?\s*(\d+\.?\d*)/i);
-    if(wcc) { setGhost('wcc', wcc); setGhost('bl_wcc', wcc); }
+    const rr = extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i);
+    if(rr) setGhost('b_rr', rr);
 
-    const crp = extract(/CRP\s*[:]?\s*(\d+)/i);
-    if(crp) { setGhost('crp', crp); setGhost('bl_crp', crp); }
+    const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(\d+%?)/i);
+    if(spo2) {
+        setGhost('b_spo2', spo2.replace('%',''));
+        // Also check RA logic if needed, but keeping it simpler as per ghost request
+    }
+
+    const temp = extract(/(?:Temp|T)\s*[:]?\s*(\d+\.?\d*)/i);
+    if(temp) setGhost('e_temp', temp);
+
+    const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
+    if(airway) setGhost('airway_a', airway);
+
+    const wob = extract(/(?:WOB|Work of breathing)[\s\S]{0,20}?(nil increased|increased|moderate|severe|normal)/i);
+    if(wob) setGhost('b_wob', wob);
+
+    const pain = extract(/D:\s*(.*?)(?:-|,|$|\n|E:)/i);
+    if(pain) setGhost('d_pain', pain);
+
+    const bsl = extract(/BSL\s*[:]?\s*(\d+\.?\d*)/i);
+    if(bsl) setGhost('e_bsl', bsl);
+
+    const diet = extract(/GIT:\s*(.*?)(?:SKIN|$|\n)/i);
+    if(diet) setGhost('ae_diet', diet);
+
+    const skin = extract(/SKIN:\s*(.*?)(?:Devices|$|\n)/i);
+    if(skin) setGhost('ae_mobility', skin);
 
     // --- Bloods Loop ---
     const bloodMap = {
         'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i,
+        'Hb': /Hb\s*[:]?\s*(\d+)/i,
+        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 'CRP': /CRP\s*[:]?\s*(\d+)/i,
         'Cr': /Cr\s*[:]?\s*(\d+)/i, 'K': /K\s*[:]?\s*(\d+\.?\d*)/i,
         'Na': /Na\s*[:]?\s*(\d+)/i, 'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i,
         'Plts': /Plts\s*[:]?\s*(\d+)/i, 'Alb': /Alb\s*[:]?\s*(\d+)/i,
@@ -227,11 +260,17 @@ function processDmrNote() {
         'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i,
         'eGFR': /eGFR\s*[:]?\s*(\d+)/i
     };
-    const inputMap = { 'Lac': 'bl_lac_review', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
+    const inputMap = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
 
     for(const [label, regex] of Object.entries(bloodMap)) {
         const m = text.match(regex);
-        if(m && m[1]) setGhost(inputMap[label], m[1]);
+        if(m && m[1]) {
+            setGhost(inputMap[label], m[1]);
+            // Special cases for main page risk card
+            if(label === 'Hb') setGhost('hb', m[1]);
+            if(label === 'WCC') setGhost('wcc', m[1]);
+            if(label === 'CRP') setGhost('crp', m[1]);
+        }
     }
 
     // --- Devices (Confirm Box) ---
@@ -261,7 +300,7 @@ function processDmrNote() {
     }
 
     $('dmrPasteWrapper').style.display = 'none';
-    showToast("Data Imported: Fixed filled, Variable shown in blue");
+    showToast("Data Imported");
     computeAllAndSave();
 }
 
@@ -669,6 +708,15 @@ function calculateTimeOnWard(dateStr, timeOfDay) {
    =========================== */
 function computeAll() {
   const s = getState();
+  
+  // Auto-populate A-E inputs from ghost values if manual entry hasn't occurred
+  // This helps ensure the summary has data even if user doesn't type into empty box
+  const airwayEl = $('airway_a');
+  if (airwayEl.dataset.manual !== "true" && airwayEl.value === "") {
+      const ghost = $('ghost_airway_a')?.textContent;
+      if(ghost) airwayEl.value = ghost.replace('(prev: ','').replace(')','');
+  }
+
   const red = [], amber = [];
   const flaggedElements = { red: [], amber: [] };
   const addRisk = (list, text, note, elementId, flagType) => {
@@ -822,79 +870,191 @@ function computeAll() {
 }
 
 function generateSummary(s, cat, location, wardTimeText, red, amber) {
-    const role = s.clinicianRole || "ALERT CNS";
-    const title = (s.reviewType === 'pre') ? "ALERT Pre-Stepdown Review" : "ALERT Post-Stepdown Review";
-    const date = new Date().toLocaleDateString('en-AU', {day:'2-digit', month:'2-digit', year:'2-digit'});
-    const time = new Date().toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit', hour12:false});
+    const clean = (str) => str ? str.trim().replace(/\.$/, '').trim() : null;
+    const trendWord = val => ({ '↑': ' (uptrending)', '↓':' (downtrending)', '→':' (stable)'}[val] || '');
 
-    let text = `*** ${title} ***\n`;
-    text += `Date: ${date} ${time}\n`;
-    text += `Clinician: ${role}\n`;
-    text += `Patient: ${s.ptName||'--'} (${s.ptMrn||'--'})\n`;
-    text += `Location: ${location}\n`;
-    if(wardTimeText) text += `Time on Ward: ${wardTimeText}\n`;
-    if(s.ptAdmissionReason) text += `Adm Reason: ${s.ptAdmissionReason}\n`;
-    if(s.icuLos) text += `ICU LOS: ${s.icuLos} days\n`;
-    if(s.goc_note) text += `GOC: ${s.goc_note}\n`;
+    const role = s.clinicianRole || 'ALERT CNS';
+    const reviewTitle = (s.reviewType === 'post') ? `${role} post ICU review` : `${role} pre ICU stepdown review`;
 
-    text += `\n--- RISK ASSESSMENT: ${cat.text} ---\n`;
-    if(red.length > 0) red.forEach(f => text += `[CAT 1] ${f}\n`);
-    if(amber.length > 0) amber.forEach(f => text += `[CAT 2] ${f}\n`);
-    if(red.length === 0 && amber.length === 0) text += "No specific risk factors identified.\n";
+    const headerLines = [];
+    const ptDetails = [];
+    if (s.ptName) ptDetails.push(`Patient: ${s.ptName}`);
+    if (s.ptMrn) ptDetails.push(`URN: ...${s.ptMrn}`);
+    if (location) ptDetails.push(`Location: ${location}`);
+    if (ptDetails.length) headerLines.push(ptDetails.join(' | '));
 
-    text += `\n--- OBSERVATIONS ---\n`;
-    if(s.adds) text += `ADDS: ${s.adds}\n`;
-    if(s.airway_a) text += `A: ${s.airway_a}\n`;
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const roundedMinutes = Math.round(minutes / 15) * 15;
+    if (roundedMinutes === 60) { now.setHours(now.getHours() + 1); now.setMinutes(0); } else { now.setMinutes(roundedMinutes); }
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
-    let b = [];
-    if(s.b_rr) b.push(`RR ${s.b_rr}`);
-    if(s.b_spo2) b.push(`SpO2 ${s.b_spo2}%`);
-    if(s.b_device) b.push(s.b_device);
-    if(s.b_wob) b.push(s.b_wob);
-    if(b.length) text += `B: ${b.join(', ')}\n`;
+    headerLines.push(reviewTitle, `Time of review: ${timeStr}`);
 
-    let c = [];
-    if(s.c_hr) c.push(`HR ${s.c_hr} (${s.c_hr_rhythm||'unspecified'})`);
-    if(s.c_nibp) c.push(`BP ${s.c_nibp}`);
-    if(s.c_cr) c.push(`CR ${s.c_cr}`);
-    if(c.length) text += `C: ${c.join(', ')}\n`;
+    // Use stepdown date as ICU discharge date
+    if (s.stepdownDate) {
+        const [y, m, d] = s.stepdownDate.split('-');
+        headerLines.push(`ICU Discharge Date: ${d}/${m}/${y}`);
+    }
 
-    let d = [];
-    if(s.d_alert) d.push(s.d_alert);
-    if(s.d_pain) d.push(`Pain: ${s.d_pain}`);
-    if(d.length) text += `D: ${d.join(', ')}\n`;
+    const stepdownParts = [];
+    if (s.reviewType === 'post' && wardTimeText) stepdownParts.push(`Time since stepdown: ${wardTimeText}.`);
+    if (s.icuLos) stepdownParts.push(`ICU LOS: ${s.icuLos} days.`);
+    if (stepdownParts.length) headerLines.push('', ...stepdownParts);
 
-    let e = [];
-    if(s.e_temp) e.push(`T ${s.e_temp}`);
-    if(s.e_bsl) e.push(`BSL ${s.e_bsl}`);
-    if(s.e_uop) e.push(`UOP ${s.e_uop}`);
-    if(e.length) text += `E: ${e.join(', ')}\n`;
+    if(s.ptAdmissionReason) headerLines.push(`Reason for ICU Admission: ${s.ptAdmissionReason}`);
 
-    if(s.ae_diet) text += `Diet: ${s.ae_diet}\n`;
-    if(s.ae_mobility) text += `Mobility/Skin: ${s.ae_mobility}\n`;
+    const lines = [...headerLines, '', `ALERT Nursing Review Category - ${cat.text}`];
+    if (s.pmh_note && s.pmh_note.trim()) lines.push('', 'PMH:', s.pmh_note.trim());
 
-    let devs = [];
-    if(s.devices) Object.entries(s.devices).forEach(([k, vals]) => vals.forEach(v => devs.push(`${k}: ${v}`)));
-    if(devs.length) text += `Devices: ${devs.join(', ')}\n`;
+    // A-E
+    const atoe = [];
+    // MODS line
+    if (s.chk_use_mods === true) {
+        const modsParts = [];
+        if(s.mods_score) modsParts.push(`MODS Score: ${s.mods_score}`);
+        if(s.mods_details) modsParts.push(`Details: ${s.mods_details}`);
+        if(modsParts.length > 0) atoe.push(modsParts.join(' | '));
+    } else if(s.adds) {
+        atoe.push(`ADDS: ${s.adds}`); // fallback if no mods
+    }
 
-    let bl = [];
-    if(s.bl_hb) bl.push(`Hb ${s.bl_hb}`);
-    if(s.bl_wcc) bl.push(`WCC ${s.bl_wcc}`);
-    if(s.bl_crp) bl.push(`CRP ${s.bl_crp}`);
-    if(s.bl_cr_review) bl.push(`Cr ${s.bl_cr_review}`);
-    if(s.bl_k) bl.push(`K ${s.bl_k}`);
-    if(s.bl_mg) bl.push(`Mg ${s.bl_mg}`);
-    if(s.bl_lac_review) bl.push(`Lac ${s.bl_lac_review}`);
-    if(bl.length) text += `\nBloods: ${bl.join(', ')}\n`;
+    if (s.airway_a) atoe.push(`A: ${s.airway_a.trim()}`);
 
-    text += `\n--- PLAN ---\n`;
-    const plan = $('followUpInstructions').textContent;
-    text += `${plan}\n`;
+    const b_parts = [
+      clean(s.b_rr) ? `RR ${clean(s.b_rr)}${trendWord(s.b_rr_trend)}`:null,
+      clean(s.b_spo2) ? `SpO2 ${clean(s.b_spo2)}${clean(s.b_spo2).includes('%') ? '' : '%'}`:null,
+      clean(s.b_device),
+      clean(s.b_wob) ? `WOB ${clean(s.b_wob)}`:null
+    ];
+    if(b_parts.filter(Boolean).length) atoe.push(`B: ${b_parts.filter(Boolean).join(', ')}`);
 
-    if(s.chk_medical_rounding) text += "- Added to ALERT Medical Rounding List\n";
-    if(s.chk_discharge_alert) text += "- Discharged from ALERT List\n";
+    let hrString = clean(s.c_hr) ? `HR ${clean(s.c_hr)}${trendWord(s.c_hr_trend)}`:null;
+    if (hrString && s.c_hr_rhythm) hrString += ` (${s.c_hr_rhythm})`;
 
-    $('summary').value = text;
+    const c_parts = [
+      hrString,
+      clean(s.c_nibp) ? `NIBP ${clean(s.c_nibp)}${trendWord(s.c_nibp_trend)}`:null,
+      clean(s.c_cr) ? `Cap Refill ${clean(s.c_cr)}`:null,
+      clean(s.c_perf)
+    ];
+    if(c_parts.filter(Boolean).length) atoe.push(`C: ${c_parts.filter(Boolean).join(', ')}`);
+
+    // Alert + Pain
+    const d_parts = [];
+    if(s.d_alert && s.d_alert.trim()) d_parts.push(s.d_alert.trim());
+    if(s.d_pain && s.d_pain.trim()) d_parts.push(`Pain ${s.d_pain.trim()}`);
+    if(d_parts.length) atoe.push(`D: ${d_parts.join(', ')}`);
+
+    const e_parts = [
+      clean(s.e_temp) ? `Temp ${clean(s.e_temp)}${String(clean(s.e_temp)).toLowerCase().match(/febrile|afebrile|C/) ? '' : 'C'}`:null,
+      clean(s.e_bsl) ? `BSL ${clean(s.e_bsl)}`:null,
+      clean(s.e_uop) ? `UOP ${clean(s.e_uop)}`:null
+    ];
+    if(e_parts.filter(Boolean).length) atoe.push(`E: ${e_parts.filter(Boolean).join(', ')}`);
+
+    const otherSys = [];
+    if (s.ae_mobility) otherSys.push(`Mobility/MSK: ${s.ae_mobility.trim()}`);
+    if (s.ae_diet) otherSys.push(`Diet: ${s.ae_diet.trim()}`);
+
+    // Bowels Logic
+    let bowelStr = s.ae_bowels ? s.ae_bowels.trim() : '';
+    const dateFunc = (str) => { if(!str) return ''; const [y,m,d] = str.split('-'); return `${d}/${m}/${y}`; };
+
+    if (s.bowel_mode === 'btn_bno' && s.bowel_date) {
+        const date = dateFunc(s.bowel_date);
+        bowelStr = bowelStr ? `BNO (Last opened: ${date}), ${bowelStr}` : `BNO (Last opened: ${date})`;
+        if (s.chk_aperients) bowelStr += ' (Aperients charted)';
+    } else if (s.bowel_mode === 'btn_bo' && s.bowel_date) {
+        const date = dateFunc(s.bowel_date);
+        bowelStr = bowelStr ? `BO (Date: ${date}), ${bowelStr}` : `BO (Date: ${date})`;
+    } else if (s.bowel_mode === 'btn_bno') {
+        bowelStr = bowelStr ? `BNO, ${bowelStr}` : `BNO`;
+        if (s.chk_aperients) bowelStr += ' (Aperients charted)';
+    } else if (s.bowel_mode === 'btn_bo') {
+        bowelStr = bowelStr ? `BO, ${bowelStr}` : `BO`;
+    }
+
+    if (bowelStr) otherSys.push(`Bowels: ${bowelStr}`);
+
+    if (atoe.length || otherSys.length) {
+        lines.push('', 'A-E ASSESSMENT', ...atoe);
+        if(atoe.length && otherSys.length) lines.push('---');
+        lines.push(...otherSys);
+    }
+
+    // Bloods
+    const bloodLines = [];
+    const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4' };
+    const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','plts','alb','neut','lymph'];
+
+    const bloods = bloodParts.map(k => {
+      const v = s[`bl_${k}`]; if (!v) return null;
+      const trend = s[`bl_${k}_trend`] || '';
+      return `${bloodLabelMap[k]} ${v}${trendWord(trend)}`;
+    }).filter(Boolean).join(', ');
+
+    let fullBloodLine = bloods;
+    if (s.new_bloods_ordered === true) fullBloodLine += `${bloods ? ' ' : ''}(new bloods ordered for next round.)`;
+
+    if (fullBloodLine) bloodLines.push(`Bloods: ${fullBloodLine}`);
+    if (s.elec_replace_note) bloodLines.push(`Electrolyte Plan: ${s.elec_replace_note.trim()}`);
+    if (bloodLines.length) lines.push('', ...bloodLines);
+
+    if (s.reviewType === 'pre' && s.infusions_note && s.infusions_note.trim()) {
+        lines.push(`Infusions: ${s.infusions_note.trim()}`);
+    }
+
+    // Devices
+    if(s.devices) {
+        const devLines = [];
+        deviceTypes.forEach(type => {
+          if(s.devices[type] && s.devices[type].length) {
+              s.devices[type].forEach(d => {
+                  const det = d ? d.trim() : '';
+                  if(type === 'Other CVAD' || type === 'Other Device') {
+                      devLines.push(det || type);
+                  } else {
+                      devLines.push(det ? `${type} (${det})` : type);
+                  }
+              });
+          }
+        });
+        if(devLines.length) lines.push('', 'DEVICES:', ...devLines.map(d=>'- '+d));
+    }
+
+    // Context
+    const contextLines = [];
+    if (s.goc_note) {
+      const gocText = s.goc_note.trim();
+      contextLines.push(gocText.toLowerCase().startsWith('goc') ? gocText : `GOC: ${gocText}`);
+    }
+    if (s.allergies_note) contextLines.push(`Allergies: ${s.allergies_note.trim()}`);
+    if (s.pics_note) contextLines.push(`Post ICU Syndrome: ${s.pics_note.trim()}`);
+    if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
+    if (contextLines.length) lines.push('', ...contextLines);
+
+    // Risk Factors
+    const allFlags = [...red, ...amber];
+    if (allFlags.length) lines.push('', 'IDENTIFIED RISK FACTORS:', ...allFlags.map(f=>'- '+f));
+
+    // Plan
+    lines.push('', 'PLAN:');
+    if (s.chk_discharge_alert === true) {
+        lines.push('- Follow-up: Discharge from ALERT nursing post ICU review list.');
+    } else if (cat.id === 'red') {
+        lines.push(`- Follow-up: ${red.length >= 3 ? 'Twice-daily' : 'At least daily'} ALERT review for up to 72h post-ICU stepdown.`);
+    } else if (cat.id === 'amber') {
+        lines.push('- Follow-up: Once-daily ALERT review for up to 48h post-ICU stepdown.');
+    } else {
+        lines.push('- Follow-up: Single ALERT review on ward to ensure continued stability.');
+    }
+
+    if (s.chk_medical_rounding) {
+        lines.push('- Added to ALERT Medical Rounding List.');
+    }
+
+    $('summary').value = lines.join('\n');
 }
 
 function openRedcapAccelerator() {
