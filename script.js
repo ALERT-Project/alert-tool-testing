@@ -6,9 +6,8 @@ const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); 
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v4.7'; 
-const ACCORDION_KEY = 'alertNursingToolAccordions_v4.7';
-const UNDO_KEY = 'alertNursingToolUndo_v4.7';
+const STORAGE_KEY = 'alertNursingToolData_v4.8'; 
+const ACCORDION_KEY = 'alertNursingToolAccordions_v4.8';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -61,31 +60,27 @@ const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'PICC Line', 'Enteral Tube', '
    2. DOM & UI Helpers
    =========================== */
 
-// Fixed: Helper for Quick Select buttons (Stacking text)
+// Stack text for quick select
 window.stackText = function(id, text) {
     const el = $(id);
     if (!el) return;
-    // If empty, set it. If exists, append with comma.
-    if (el.value.trim() === "") {
-        el.value = text;
-    } else if (!el.value.includes(text)) {
-        el.value = el.value + ", " + text;
-    }
-    el.dispatchEvent(new Event('input')); // Trigger save/compute
+    if (el.value.trim() === "") el.value = text;
+    else if (!el.value.includes(text)) el.value = el.value + ", " + text;
+    el.dispatchEvent(new Event('input')); 
 };
 
-// Ghost Values
+// Ghost Value Helper (The Blue Text under label)
 function setGhostValue(inputId, value) {
     const el = $(inputId);
     if (!el || !value) return;
 
+    // Check if hint exists
     const hintId = `hint_for_${inputId}`;
     let hint = $(hintId);
-
     if (!hint) {
         hint = document.createElement('div');
         hint.id = hintId;
-        hint.className = 'scraped-hint-text';
+        hint.className = 'scraped-hint-text'; // Blue class from CSS
         el.parentNode.insertBefore(hint, el);
     }
     hint.textContent = value;
@@ -94,19 +89,18 @@ function setGhostValue(inputId, value) {
 
 function clearGhostValues() {
     document.querySelectorAll('.scraped-hint-text').forEach(el => el.remove());
+    document.querySelectorAll('.scraped-filled').forEach(el => el.classList.remove('scraped-filled'));
     document.querySelectorAll('.device-entry[style*="dashed"]').forEach(el => el.remove()); 
 }
 
-/* --- COMPACT MODE LOGIC (NEW) --- */
+/* --- COMPACT MODE LOGIC --- */
 function enableCompactMode() {
-    // 1. Identify all column containers (.col-X)
     const cols = document.querySelectorAll('.grid > div[class*="col-"]');
     
     cols.forEach(col => {
-        // Assume hidden unless we find populated data
         let hasData = false;
 
-        // Check Inputs/Selects/Textareas
+        // Check Inputs/Selects
         const inputs = col.querySelectorAll('input, select, textarea');
         inputs.forEach(input => {
             if (input.type === 'checkbox' || input.type === 'radio') {
@@ -116,26 +110,20 @@ function enableCompactMode() {
             }
         });
 
-        // Check active buttons (segmented, select, toggles)
+        // Check active buttons
         if (col.querySelector('.active')) hasData = true;
         
-        // Check if it contains a ghost hint
+        // Check Ghost Hints (So A-E fields with only hints show up)
         if (col.querySelector('.scraped-hint-text')) hasData = true;
         
-        // Check if it contains devices
+        // Check Devices
         if (col.id === 'devices-container' && col.children.length > 0) hasData = true;
         if (col.querySelector('#devices-container') && col.querySelector('#devices-container').children.length > 0) hasData = true;
 
-        // Apply visibility
-        if (hasData) {
-            col.classList.remove('compact-hidden');
-        } else {
-            col.classList.add('compact-hidden');
-        }
+        if (hasData) col.classList.remove('compact-hidden');
+        else col.classList.add('compact-hidden');
     });
 
-    // 2. Hide headers if their section is empty? (Optional optimization, skipping for now to keep it fast)
-    // 3. Show the "Show All" button
     const expandBtn = $('expandFormBtn');
     if(expandBtn) expandBtn.style.display = 'flex';
 }
@@ -158,14 +146,14 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
             <label>${type}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <textarea style="flex: 1;" placeholder="Enter details...">${value}</textarea>
-                <div class="remove-entry" role="button" tabindex="0">Remove</div>
+                <div class="remove-entry" role="button" tabindex="0" style="cursor:pointer; color:var(--red); font-weight:700;">Remove</div>
             </div>
         `;
         container.appendChild(div);
-        const ta = div.querySelector('textarea');
-        ta.addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
+        div.querySelector('textarea').addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
         div.querySelector('.remove-entry').addEventListener('click', () => { div.remove(); computeAll(); saveState(); });
     } else {
+        // Scraped Device (Blue Dashed)
         div.style.border = "2px dashed var(--blue-hint)";
         div.style.padding = "8px";
         div.style.marginBottom = "8px";
@@ -196,40 +184,18 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
 }
 
 function getOxyDeviceText(s) {
-    let oxyDeviceText = '';
+    let t = '';
     switch (s.oxMod) {
-        case 'RA': oxyDeviceText = 'RA'; break;
-        case 'NP': oxyDeviceText = s.npFlow ? `${s.npFlow}L NP` : 'NP'; break;
-        case 'HFNP':
-            let hfnpParts = [];
-            if (s.hfnpFlow) hfnpParts.push(`${s.hfnpFlow}L`);
-            if (s.hfnpFio2) hfnpParts.push(`${s.hfnpFio2}%`);
-            oxyDeviceText = `HFNP ${hfnpParts.join(' / ')}`;
-            break;
-        case 'NIV':
-            let nivParts = [];
-            if (s.nivFio2) nivParts.push(`${s.nivFio2}% FiO2`);
-            if (s.nivPeep) nivParts.push(`${s.nivPeep} PEEP`);
-            if (s.nivPs) nivParts.push(`${s.nivPs} PS`);
-            oxyDeviceText = `NIV ${nivParts.join(', ')}`;
-            break;
+        case 'RA': t = 'RA'; break;
+        case 'NP': t = s.npFlow ? `${s.npFlow}L NP` : 'NP'; break;
+        case 'HFNP': t = `HFNP ${s.hfnpFlow||''}${s.hfnpFlow?'L':''} ${s.hfnpFio2||''}${s.hfnpFio2?'%':''}`; break;
+        case 'NIV': t = `NIV ${s.nivFio2||''}% ${s.nivPeep||''}PEEP ${s.nivPs||''}PS`; break;
     }
-    return oxyDeviceText.trim();
-}
-
-function getAirwayDeviceText(s) {
-    let airwayDeviceText = '';
-    if (s.oxMod === 'Trache') {
-        const tracheType = s.tracheType;
-        airwayDeviceText = !tracheType ? 'Altered Airway' : tracheType;
-        const details = s.trache_details_note ? s.trache_details_note.trim() : '';
-        if (details) airwayDeviceText += ` (${details})`;
-    }
-    return airwayDeviceText.trim();
+    return t.trim();
 }
 
 /* ===========================
-   3. The DMR Scraper (Major Overhaul)
+   3. The DMR Scraper (Fixed)
    =========================== */
 function processDmrNote() {
     const text = $('dmrPasteInput').value;
@@ -238,25 +204,54 @@ function processDmrNote() {
     $('pasteError').style.display = 'none';
     clearGhostValues(); 
 
-    // Helper: Fill value or show hint. 
-    // forceValue = true means "Put this in the box now, don't just show a ghost hint"
-    const setScraped = (id, val, forceValue = false) => {
+    // Helper: Fill value, Add Blue Class
+    const setScraped = (id, val, forceGhost = false) => {
         const el = $(id);
         if(!el || !val) return;
 
-        if (forceValue || id.includes('note') || id === 'ptAdmissionReason' || id === 'goc_note' || id === 'pmh_note') {
+        // Visual Preference: Blue text under label for clarity
+        setGhostValue(id, val);
+
+        // Functional Requirement: Fill input so Summary Works
+        if (!forceGhost) {
             el.value = val;
+            el.classList.add('scraped-filled'); // Make input text blue/bold
             el.dispatchEvent(new Event('input'));
-        } else {
-            setGhostValue(id, val);
         }
     };
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
-    // --- 1. Demographics / Context ---
+    // --- 1. Demographics ---
+    const los = extract(/LOS\s*(\d+)/i);
+    if(los) setScraped('icuLos', los);
+
     const admission = extract(/Admitted post\s*(.*?)(?:\n|$|Not for)/i);
     if(admission) setScraped('ptAdmissionReason', admission);
+
+    const dateMatch = extract(/Discharged.*?on\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
+    if(dateMatch) {
+         // Convert DD/MM/YY to YYYY-MM-DD for input[type=date]
+         const parts = dateMatch.split(/[\/\-\.]/);
+         if(parts.length === 3) {
+             let d = parts[0], m = parts[1], y = parts[2];
+             if(y.length === 2) y = "20" + y;
+             setScraped('stepdownDate', `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+         }
+    }
+
+    const timeMatch = extract(/Seen\s*(\d{4})/i);
+    if(timeMatch) {
+        // Map HHMM to Time of Day button
+        const hour = parseInt(timeMatch.substring(0,2));
+        let timeVal = 'Morning';
+        if(hour >= 12 && hour < 17) timeVal = 'Afternoon';
+        else if(hour >= 17 && hour < 21) timeVal = 'Evening';
+        else if(hour >= 21 || hour < 6) timeVal = 'Night';
+        
+        const btn = $(`stepdownTime`).querySelector(`[data-value="${timeVal}"]`);
+        if(btn) btn.click();
+    }
 
     const gocMatch = text.match(/(Not for CPR.*?(?:METS\.|For METS|for METS)|NFR.*?|For METS.*?)/i);
     if (gocMatch) setScraped('goc_note', gocMatch[0].trim());
@@ -264,28 +259,22 @@ function processDmrNote() {
     const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|O\/E:|Social:|ADDS:)/i);
     if(pmh) setScraped('pmh_note', pmh.trim());
 
-    // --- 2. ADDS & Vital Signs (Specific matching for your format) ---
+    // --- 2. Vitals ---
     const adds = extract(/ADDS[:\s]+(\d+)/i);
-    if(adds) {
-        // Force value for ADDS score to prevent layout shifting
-        setScraped('adds', adds, true); 
-        setScraped('atoe_adds', adds, true);
-    }
+    if(adds) { setScraped('adds', adds); setScraped('atoe_adds', adds); }
 
-    // Vitals Logic (New regexes to catch T37.6, HR 139, etc)
     const hr = extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i);
-    if(hr) setScraped('c_hr', hr, true);
+    if(hr) setScraped('c_hr', hr);
 
     const bp = extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i);
-    if(bp) setScraped('c_nibp', bp, true);
+    if(bp) setScraped('c_nibp', bp);
 
     const rr = extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i);
-    if(rr) setScraped('b_rr', rr, true);
+    if(rr) setScraped('b_rr', rr);
 
     const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(\d+%?)/i);
     if(spo2) {
-        setScraped('b_spo2', spo2.replace('%',''), true);
-        // Check Room Air
+        setScraped('b_spo2', spo2.replace('%',''));
         if(/SpO2.*?RA|RA.*?SpO2|Room Air/i.test(text)) {
             const btn = document.querySelector('#oxMod [data-value="RA"]');
             if(btn) btn.click();
@@ -293,61 +282,47 @@ function processDmrNote() {
     }
 
     const temp = extract(/(?:Temp|T)\s*[:]?\s*(\d+\.?\d*)/i);
-    if(temp) setScraped('e_temp', temp, true);
+    if(temp) setScraped('e_temp', temp);
 
-    // --- 3. A-E Assessment ---
-    // A
+    // --- 3. A-E ---
     const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
-    if(airway) setScraped('airway_a', airway, true);
+    if(airway) setScraped('airway_a', airway);
 
-    // B WOB
     const wob = extract(/(?:WOB|Work of breathing)[\s\S]{0,20}?(nil increased|increased|moderate|severe|normal)/i);
-    if(wob) setScraped('b_wob', wob, true);
+    if(wob) setScraped('b_wob', wob);
 
-    // D Pain / Alert
     const pain = extract(/D:\s*(.*?)(?:-|,|$|\n|E:)/i);
-    if(pain) setScraped('d_pain', pain, true); // Often contains "8/10 pain"
+    if(pain) setScraped('d_pain', pain); 
 
-    // E BSL / Urine
     const bsl = extract(/BSL\s*[:]?\s*(\d+\.?\d*)/i);
-    if(bsl) setScraped('e_bsl', bsl, true);
+    if(bsl) setScraped('e_bsl', bsl);
     
-    // Diet & Bowels (Generic grabbers)
     const diet = extract(/GIT:\s*(.*?)(?:SKIN|$|\n)/i);
-    if(diet) setScraped('ae_diet', diet, true);
+    if(diet) setScraped('ae_diet', diet);
 
     const skin = extract(/SKIN:\s*(.*?)(?:Devices|$|\n)/i);
-    if(skin) setScraped('ae_mobility', skin, true); // Mapping Skin to Mobility/Risk box roughly
+    if(skin) setScraped('ae_mobility', skin); 
 
-    // --- 4. Bloods (Improved Loose Matching) ---
-    // Handles: "Hb 86, lact 1.8" (commas, spaces, no colons)
+    // --- 4. Bloods ---
     const bloodMap = { 
-        'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Hb': /Hb\s*[:]?\s*(\d+)/i, 
-        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 
-        'CRP': /CRP\s*[:]?\s*(\d+)/i, 
-        'Cr': /Cr\s*[:]?\s*(\d+)/i, 
-        'K': /K\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Na': /Na\s*[:]?\s*(\d+)/i, 
-        'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Plts': /Plts\s*[:]?\s*(\d+)/i, 
-        'Alb': /Alb\s*[:]?\s*(\d+)/i, 
-        'Neut': /Neut\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Lymph': /Lymph\s*[:]?\s*(\d+\.?\d*)/i, 
-        'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i, 'Hb': /Hb\s*[:]?\s*(\d+)/i, 
+        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 'CRP': /CRP\s*[:]?\s*(\d+)/i, 
+        'Cr': /Cr\s*[:]?\s*(\d+)/i, 'K': /K\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Na': /Na\s*[:]?\s*(\d+)/i, 'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Plts': /Plts\s*[:]?\s*(\d+)/i, 'Alb': /Alb\s*[:]?\s*(\d+)/i, 
+        'Neut': /Neut\s*[:]?\s*(\d+\.?\d*)/i, 'Lymph': /Lymph\s*[:]?\s*(\d+\.?\d*)/i, 
+        'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i, 
         'eGFR': /eGFR\s*[:]?\s*(\d+)/i 
     };
     const inputMap = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
 
     for(const [label, regex] of Object.entries(bloodMap)) {
         const m = text.match(regex);
-        if(m && m[1]) setScraped(inputMap[label], m[1], true);
+        if(m && m[1]) setScraped(inputMap[label], m[1]);
     }
 
-    // --- 5. Devices (Robust List Parsing) ---
+    // --- 5. Devices ---
     $('devices-container').innerHTML = '';
-    
     const parseAndAddDevice = (rawLine) => {
         if(!rawLine || rawLine.length < 3) return;
         const lower = rawLine.toLowerCase();
@@ -358,47 +333,39 @@ function processDmrNote() {
         else if(lower.includes('cvl') || lower.includes('cvc')) { type = 'CVC'; }
         else if(lower.includes('idc')) { type = 'IDC'; }
         else if(lower.includes('picc')) { type = 'PICC Line'; }
-        else if(lower.includes('drain') || lower.includes('icc')) { type = 'Drain'; } // Catch ICC
+        else if(lower.includes('drain') || lower.includes('icc')) { type = 'Drain'; } 
         else if(lower.includes('ng') || lower.includes('nj')) { type = 'Enteral Tube'; }
 
-        // Cleanup
         details = details.replace(/^[x\-\:\*]+\s*/, '').trim(); 
-        createDeviceEntry(type, details, true); // true = ghost candidate (dashed)
+        createDeviceEntry(type, details, true); 
     };
 
-    // Strategy A: "Devices:" block
     const deviceBlock = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z][a-z]+:|$)/i);
     if (deviceBlock) {
         const lines = deviceBlock[1].split('\n');
-        lines.forEach(line => {
-             const clean = line.trim();
-             if(clean) parseAndAddDevice(clean);
-        });
+        lines.forEach(line => { const clean = line.trim(); if(clean) parseAndAddDevice(clean); });
     } else {
-        // Strategy B: Fallback (Scanning entire text for keywords if block missing)
         if(/PIVC/i.test(text)) parseAndAddDevice("PIVC (found in text)");
         if(/IDC/i.test(text)) parseAndAddDevice("IDC (found in text)");
         if(/CVL|CVC/i.test(text)) parseAndAddDevice("CVC (found in text)");
         if(/ICC|Drain/i.test(text)) parseAndAddDevice("Drain (found in text)");
     }
 
-    // --- 6. Misc Triggers ---
+    // --- 6. Misc ---
     if (/Modifications for/i.test(text)) {
         $('chk_use_mods').checked = true;
-        $('chk_use_mods').dispatchEvent(new Event('change'));
         const modsMatch = text.match(/Modifications for (.*?)(?:\.|$)/i);
         if(modsMatch) $('mods_details').value = modsMatch[1];
     }
     
-    // Open Bloods Accordion if we found data
-    const bloodsDetails = document.querySelector('details[data-accordion-id="bloods"]');
-    if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); 
+    // Open Bloods Accordion if data found
+    if(document.querySelector('details[data-accordion-id="bloods"]')) {
+        document.querySelector('details[data-accordion-id="bloods"]').setAttribute('open', 'true');
+    }
 
     $('dmrPasteWrapper').style.display = 'none'; 
-    showToast("Data Scraped & Compact Mode Active");
+    showToast("Data Scraped - Blue Fields");
     computeAllAndSave();
-    
-    // Enable Compact Mode
     enableCompactMode();
 }
 
@@ -420,11 +387,7 @@ function saveState(instantly=false) {
 }
 
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch(e){ return null; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch(e){ return null; }
 }
 
 function updateLastSaved() {
@@ -437,35 +400,26 @@ function updateLastSaved() {
 function getState() {
   const state = {};
   for (const id of staticInputs) {
-    const el = $(id);
-    if (!el) continue;
-    state[id] = el.value;
+    const el = $(id); if (!el) continue; state[id] = el.value;
   }
-  
   for (const id of segmentedInputs) {
-    const group = $(`seg_${id}`);
-    if(!group) continue;
+    const group = $(`seg_${id}`); if(!group) continue;
     const active = group.querySelector('.seg-btn.active');
     state[id] = active ? (active.dataset.value === "true") : null;
   }
-  
   for (const id of toggleInputs) {
     const el = $(`toggle_${id}`);
     state[id] = el ? el.dataset.value === 'true' : false;
   }
-
   for (const groupId of selectInputs) {
-    const el = $(groupId);
-    if (!el) continue;
+    const el = $(groupId); if (!el) continue;
     const active = el.querySelector('.select-btn.active');
     state[groupId] = active ? active.dataset.value : '';
   }
   let checked = document.querySelector('input[name="reviewType"]:checked');
   state['reviewType'] = checked ? checked.value : 'post';
-
   checked = document.querySelector('input[name="clinicianRole"]:checked');
   state['clinicianRole'] = checked ? checked.value : 'ALERT CNS';
-  
   state['chk_medical_rounding'] = $('chk_medical_rounding').checked;
   state['chk_discharge_alert'] = $('chk_discharge_alert').checked;
   state['chk_use_mods'] = $('chk_use_mods').checked;
@@ -476,7 +430,6 @@ function getState() {
 
   state.devices = {};
   document.querySelectorAll('.device-entry').forEach(div => {
-      // Don't save ghost candidates
       if(div.querySelector('.confirm-dev')) return; 
       const type = div.dataset.type;
       const val = div.querySelector('textarea').value;
@@ -488,64 +441,36 @@ function getState() {
     const activeBtn = group.querySelector('.trend-btn.active');
     state[group.id] = activeBtn ? activeBtn.dataset.value : '';
   });
-
   return state;
 }
 
 function restoreState(state) {
   if (!state) return;
   for (const id of staticInputs) {
-    const el = $(id);
-    if (!el) continue;
-    if (state[id] !== undefined) el.value = state[id];
+    const el = $(id); if (!el) continue; if (state[id] !== undefined) el.value = state[id];
   }
-
   for (const id of segmentedInputs) {
-    const group = $(`seg_${id}`);
-    if(!group) continue;
+    const group = $(`seg_${id}`); if(!group) continue;
     group.querySelectorAll('.seg-btn').forEach(btn => btn.classList.remove('active'));
-    
-    if (state[id] === true) {
-        const btn = group.querySelector('.seg-btn[data-value="true"]');
-        if(btn) btn.classList.add('active');
-        handleSegmentClick(id, "true");
-    } else if (state[id] === false) {
-        const btn = group.querySelector('.seg-btn[data-value="false"]');
-        if(btn) btn.classList.add('active');
-        handleSegmentClick(id, "false");
-    } else {
-        handleSegmentClick(id, null);
-    }
+    if (state[id] === true) handleSegmentClick(id, "true", group.querySelector('[data-value="true"]'));
+    else if (state[id] === false) handleSegmentClick(id, "false", group.querySelector('[data-value="false"]'));
   }
-  
   for (const id of toggleInputs) {
-    const el = $(`toggle_${id}`);
-    if (!el) continue;
-    const val = state[id];
-    el.dataset.value = val ? 'true' : 'false';
-    el.classList.toggle('active', !!val);
-    if (id === 'comorb_other') {
-        const noteWrapper = $('comorb_other_note_wrapper');
-        if(noteWrapper) noteWrapper.style.display = val ? 'block' : 'none';
-    }
+    const el = $(`toggle_${id}`); if (!el) continue;
+    el.dataset.value = state[id] ? 'true' : 'false';
+    el.classList.toggle('active', !!state[id]);
+    if (id === 'comorb_other' && state[id]) $('comorb_other_note_wrapper').style.display = 'block';
   }
-
   for (const groupId of selectInputs) {
-    const value = state[groupId];
-    if (!value) continue;
+    const value = state[groupId]; if (!value) continue;
     const btn = $(groupId).querySelector(`.select-btn[data-value="${value}"]`);
     if (btn) btn.classList.add('active');
   }
   
   if (state['reviewType']) {
     const radioEl = document.querySelector(`input[name="reviewType"][value="${state['reviewType']}"]`);
-    if (radioEl) { 
-        radioEl.checked = true; 
-        updateWardOptions();
-        updateLayoutMode(state['reviewType']);
-    }
+    if (radioEl) { radioEl.checked = true; updateWardOptions(); updateLayoutMode(state['reviewType']); }
   }
-  
   if (state['clinicianRole']) {
     const radioEl = document.querySelector(`input[name="clinicianRole"][value="${state['clinicianRole']}"]`);
     if (radioEl) radioEl.checked = true;
@@ -570,9 +495,7 @@ function restoreState(state) {
   $('devices-container').innerHTML = '';
   if (state.devices) {
       deviceTypes.forEach(type => {
-          if (state.devices[type]) {
-              state.devices[type].forEach(value => createDeviceEntry(type, value));
-          }
+          if (state.devices[type]) state.devices[type].forEach(value => createDeviceEntry(type, value));
       });
   }
   
@@ -582,33 +505,17 @@ function restoreState(state) {
     const btnToActivate = group.querySelector(`.trend-btn[data-value="${value}"]`);
     if(btnToActivate) btnToActivate.classList.add('active');
   });
-  
-  const expectedOxyText = getOxyDeviceText(state);
-  const bDeviceEl = $('b_device');
-  bDeviceEl.dataset.manual = (state.b_device === expectedOxyText || state.b_device === "") ? "false" : "true";
-
-  const aDeviceEl = $('airway_a');
-  const expectedAirwayText = getAirwayDeviceText(state);
-  if (state.airway_a === expectedAirwayText) {
-      aDeviceEl.dataset.manual = "false";
-  } else {
-      aDeviceEl.dataset.manual = "true";
-  }
 
   updateWardOtherVisibility();
   toggleInfusionsBox();
 }
 
 /* ===========================
-   5. Initialization & Handlers
+   5. Initialization
    =========================== */
 function clearAllDataSafe() {
     if (!confirm('Are you sure you want to clear all data?')) return;
-    
-    // Reset inputs
-    if(typeof staticInputs !== 'undefined') {
-        staticInputs.forEach(id => { const el = $(id); if(el) el.value = ''; });
-    }
+    if(typeof staticInputs !== 'undefined') staticInputs.forEach(id => { const el = $(id); if(el) el.value = ''; });
     clearGhostValues();
     $('devices-container').innerHTML = '';
     document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
@@ -617,39 +524,26 @@ function clearAllDataSafe() {
         if(btn.classList.contains('toggle-label')) btn.dataset.value = 'false';
     });
     if($('dmrPasteInput')) $('dmrPasteInput').value = '';
-    
-    // Reset view
     disableCompactMode();
     $('mods_inputs').style.display = 'none';
     $('infectionMarkers').style.display = 'none';
-    
     computeAllAndSave();
 }
 
 function initialize() {
-  
   if($('clearDataBtnTop')) $('clearDataBtnTop').onclick = clearAllDataSafe;
   if($('clearDataBtnBottom')) $('clearDataBtnBottom').onclick = clearAllDataSafe;
-
   $('processPasteBtn').addEventListener('click', processDmrNote);
-  
-  // Expand Button Logic
-  if($('expandFormBtn')) {
-      $('expandFormBtn').addEventListener('click', disableCompactMode);
-  }
+  if($('expandFormBtn')) $('expandFormBtn').addEventListener('click', disableCompactMode);
 
   updateLastSaved();
   const debouncedComputeAndSave = debounce(()=>{ computeAll(); saveState(true); }, 600);
   
-  // Trend Buttons
-  const trends = ['↑', '↓', '→'];
+  // Handlers for interactive elements
   document.querySelectorAll('.trend-buttons').forEach(group => {
-      trends.forEach(trend => {
+      ['↑', '↓', '→'].forEach(trend => {
           const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'trend-btn';
-          btn.dataset.value = trend;
-          btn.textContent = trend;
+          btn.type = 'button'; btn.className = 'trend-btn'; btn.dataset.value = trend; btn.textContent = trend;
           btn.addEventListener('click', () => {
               const wasActive = btn.classList.contains('active');
               group.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
@@ -660,333 +554,181 @@ function initialize() {
       });
   });
 
-  // Segment Buttons
   document.querySelectorAll('.segmented-group').forEach(group => {
       group.querySelectorAll('.seg-btn').forEach(btn => {
          if(btn.style.pointerEvents === 'none') return; 
-         btn.addEventListener('click', () => {
-             const val = btn.dataset.value;
-             const id = group.id.replace('seg_', '');
-             if(btn.classList.contains('active')) {
-                 btn.classList.remove('active');
-                 handleSegmentClick(id, null);
-             } else {
-                 group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-                 btn.classList.add('active');
-                 handleSegmentClick(id, val);
-             }
-             debouncedComputeAndSave();
-         });
+         btn.addEventListener('click', () => handleSegmentClick(group.id.replace('seg_', ''), btn.dataset.value, btn));
       });
   });
-  
-  // Toggle Buttons
+
   document.querySelectorAll('.toggle-label').forEach(el => {
     el.addEventListener('click', ()=> {
       el.dataset.value = el.dataset.value === 'true' ? 'false' : 'true';
       el.classList.toggle('active', el.dataset.value === 'true');
-      if(el.id === 'toggle_comorb_other') {
-          const noteWrapper = $('comorb_other_note_wrapper');
-          if(noteWrapper) noteWrapper.style.display = el.dataset.value === 'true' ? 'block' : 'none';
-      }
+      if(el.id === 'toggle_comorb_other') $('comorb_other_note_wrapper').style.display = el.dataset.value === 'true' ? 'block' : 'none';
       debouncedComputeAndSave();
     });
   });
 
-  // Select Buttons
   document.querySelectorAll('.button-group').forEach(group => {
     group.querySelectorAll('.select-btn').forEach(btn => {
       btn.addEventListener('click', ()=> {
-        if (group.id === 'oxMod' || group.id === 'tracheType' || group.id === 'tracheStatus') {
-            $('b_device').dataset.manual = "false";
-            $('airway_a').dataset.manual = "false"; 
-        }
         group.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         if (group.id === 'oxMod') toggleOxyFields();
         if (group.id === 'neuroConcern') toggleNeuroFields(); 
-        const noteWrapperId = group.id + '_note_wrapper';
-        const noteWrapper = $(noteWrapperId);
-        if(noteWrapper && group.id !== 'neuroConcern') { 
-             noteWrapper.style.display = (btn.dataset.value !== 'none' && btn.dataset.value !== '') ? 'block' : 'none';
-        }
-        const fn = (group.id === 'stepdownTime') ? computeAllAndSave : debouncedComputeAndSave;
-        fn();
+        const noteWrapper = $(group.id + '_note_wrapper');
+        if(noteWrapper && group.id !== 'neuroConcern') noteWrapper.style.display = (btn.dataset.value !== 'none' && btn.dataset.value !== '') ? 'block' : 'none';
+        debouncedComputeAndSave();
       });
     });
   });
 
-  // Standard Inputs
   staticInputs.forEach(id => {
     const el = $(id); if (!el) return;
-    const evt = (el.tagName==='SELECT' || el.type==='date') ? 'change' : 'input';
-    const fn = (id === 'stepdownDate') ? computeAllAndSave : debouncedComputeAndSave;
-    el.addEventListener(evt, fn);
+    el.addEventListener((el.tagName==='SELECT' || el.type==='date') ? 'change' : 'input', debouncedComputeAndSave);
   });
-  
-  // Other Handlers
-  $('b_device').addEventListener('input', () => { $('b_device').dataset.manual = "true"; });
-  $('airway_a').addEventListener('input', () => { $('airway_a').dataset.manual = "true"; });
   
   $('chk_medical_rounding').addEventListener('change', debouncedComputeAndSave);
   $('chk_discharge_alert').addEventListener('change', debouncedComputeAndSave);
-  $('chk_use_mods').addEventListener('change', () => {
-      $('mods_inputs').style.display = $('chk_use_mods').checked ? 'block' : 'none';
-      debouncedComputeAndSave();
-  });
+  $('chk_use_mods').addEventListener('change', () => { $('mods_inputs').style.display = $('chk_use_mods').checked ? 'block' : 'none'; debouncedComputeAndSave(); });
   $('chk_aperients').addEventListener('change', debouncedComputeAndSave);
   
   ['btn_bno', 'btn_bo'].forEach(id => {
       $(id).addEventListener('click', (e) => {
           e.preventDefault();
-          const btn = $(id);
-          const other = id === 'btn_bno' ? $('btn_bo') : $('btn_bno');
+          const btn = $(id); const other = id === 'btn_bno' ? $('btn_bo') : $('btn_bno');
           const isActive = btn.classList.contains('active');
-          if (isActive) {
-              btn.classList.remove('active');
-              toggleBowelDate(null);
-          } else {
-              btn.classList.add('active');
-              other.classList.remove('active');
-              toggleBowelDate(id);
-          }
+          if (isActive) { btn.classList.remove('active'); toggleBowelDate(null); } 
+          else { btn.classList.add('active'); other.classList.remove('active'); toggleBowelDate(id); }
           debouncedComputeAndSave();
       });
   });
-  
-  document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => {
-      updateWardOptions();
-      toggleInfusionsBox();
-      updateLayoutMode(r.value);
-      debouncedComputeAndSave();
-  }));
 
-  $('ptWard').addEventListener('change', () => {
-    updateWardOtherVisibility();
-    debouncedComputeAndSave();
-  });
-
+  document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => { updateWardOptions(); toggleInfusionsBox(); updateLayoutMode(r.value); debouncedComputeAndSave(); }));
+  $('ptWard').addEventListener('change', () => { updateWardOtherVisibility(); debouncedComputeAndSave(); });
   ['neut','lymph'].forEach(id => { $(id).addEventListener('input', ()=>{ updateNLR(); debouncedComputeAndSave(); }); });
-  const sync = (a,b) => { if (!$(a) || !$(b)) return; $(a).addEventListener('input', ()=>{ $(b).value = $(a).value; debouncedComputeAndSave(); }); $(b).addEventListener('input', ()=>{ $(a).value = $(b).value; debouncedComputeAndSave(); }); };
-  sync('adds','atoe_adds'); sync('lactate','bl_lac_review'); sync('hb','bl_hb'); sync('wcc','bl_wcc'); sync('crp','bl_crp'); sync('neut','bl_neut'); sync('lymph','bl_lymph');
   
-  const ovA = $('override_amber'), ovR = $('override_red'), ovC = $('override_clear');
+  const sync = (a,b) => { if (!$(a) || !$(b)) return; $(a).addEventListener('input', ()=>{ $(b).value = $(a).value; }); $(b).addEventListener('input', ()=>{ $(a).value = $(b).value; }); };
+  sync('adds','atoe_adds'); sync('lactate','bl_lac_review'); sync('hb','bl_hb'); sync('wcc','bl_wcc'); sync('crp','bl_crp');
+
+  // Override buttons
   const setOverride = (level) => {
     $('override').value = level;
     $('override_reason_box').style.display = level==='none' ? 'none' : 'block';
-    ovA.classList.toggle('active', level==='amber');
-    ovR.classList.toggle('active', level==='red');
+    $('override_amber').classList.toggle('active', level==='amber');
+    $('override_red').classList.toggle('active', level==='red');
     debouncedComputeAndSave();
   };
-  ovA.addEventListener('click', ()=> setOverride('amber'));
-  ovR.addEventListener('click', ()=> setOverride('red'));
-  ovC.addEventListener('click', ()=> setOverride('none'));
+  $('override_amber').addEventListener('click', ()=> setOverride('amber'));
+  $('override_red').addEventListener('click', ()=> setOverride('red'));
+  $('override_clear').addEventListener('click', ()=> setOverride('none'));
 
   // Accordions
   document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
     const btn = wrapper.querySelector('.accordion');
     const panel = wrapper.querySelector('.panel');
-    const id = wrapper.dataset.accordionId || Math.random().toString(36).slice(2,8);
-    wrapper.dataset.accordionId = id;
+    const id = wrapper.dataset.accordionId;
     btn.addEventListener('click', ()=>{
       const open = panel.style.display !== 'block';
       panel.style.display = open ? 'block' : 'none';
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       btn.querySelector('.icon').textContent = open ? '[-]' : '[+]';
       const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
-      maps[id] = open;
-      localStorage.setItem(ACCORDION_KEY, JSON.stringify(maps));
+      maps[id] = open; localStorage.setItem(ACCORDION_KEY, JSON.stringify(maps));
     });
   });
   
-  // Quick Select Logic (Global)
   document.body.addEventListener('click', (e) => {
       const btn = e.target.closest('.quick-select');
-      if (!btn || btn.id.includes('btn_b') || btn.onclick) return; // Ignore if handled specifically
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const targetId = btn.dataset.target;
-      const val = btn.dataset.value;
-      const targetEl = $(targetId);
-
-      if (targetEl) {
-          targetEl.value = val;
-          targetEl.dispatchEvent(new Event('input')); 
-      }
+      if (!btn || btn.id.includes('btn_b') || btn.onclick) return;
+      e.preventDefault(); e.stopPropagation();
+      const targetEl = $(btn.dataset.target);
+      if (targetEl) { targetEl.value = btn.dataset.value; targetEl.dispatchEvent(new Event('input')); }
   });
 
   document.querySelectorAll('#panel_devices .btn[data-device-type]').forEach(button => {
-        button.addEventListener('click', () => {
-            createDeviceEntry(button.dataset.deviceType);
-            computeAll();
-            saveState();
-        });
-    });
-
-  $('copyBtn').addEventListener('click', ()=> {
-    navigator.clipboard.writeText($('summary').value).then(()=> showToast('Summary copied',1400)).catch(()=> showToast('Copy failed',2000));
+        button.addEventListener('click', () => { createDeviceEntry(button.dataset.deviceType); computeAll(); saveState(); });
   });
-  $('footerSave').addEventListener('click', ()=> { saveState(true); showToast('Saved',900); });
+
+  $('copyBtn').addEventListener('click', ()=> { navigator.clipboard.writeText($('summary').value).then(()=> showToast('Copied')).catch(()=> showToast('Failed')); });
+  $('footerSave').addEventListener('click', ()=> { saveState(true); showToast('Saved'); });
   $('footerCopy').addEventListener('click', ()=> $('copyBtn').click() );
+  $('darkToggle').addEventListener('click', ()=> { document.body.classList.toggle('dark'); localStorage.setItem('alertToolDark', document.body.classList.contains('dark') ? '1' : '0'); });
+  if (localStorage.getItem('alertToolDark') === '1') document.body.classList.add('dark');
 
-  const darkBtn = $('darkToggle');
-  const applyDark = (on) => {
-    document.body.classList.toggle('dark', !!on);
-    darkBtn.setAttribute('aria-pressed', !!on);
-    darkBtn.textContent = (!!on) ? 'Light mode' : 'Dark mode';
-    localStorage.setItem('alertToolDark', !!on ? '1' : '0');
-  };
-  darkBtn.addEventListener('click', ()=> { const on = !document.body.classList.contains('dark'); applyDark(on); });
-  if (localStorage.getItem('alertToolDark') === '1') applyDark(true);
-
-  // Restore State
+  // Load state
   const saved = loadState();
   updateWardOptions(); 
+  if (saved) restoreState(saved);
   
-  try {
-      if (saved) { restoreState(saved); }
-  } catch (err) {
-      localStorage.removeItem(STORAGE_KEY);
-  }
-  
-  toggleOxyFields();
-  toggleInfusionsBox();
-  toggleNeuroFields();
-
+  toggleOxyFields(); toggleInfusionsBox(); toggleNeuroFields();
   const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
   document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
-      const id = wrapper.dataset.accordionId;
-      if (maps[id]) {
-          const btn = wrapper.querySelector('.accordion');
-          const panel = wrapper.querySelector('.panel');
-          panel.style.display = 'block';
-          btn.setAttribute('aria-expanded','true');
-          btn.querySelector('.icon').textContent='[-]';
+      if (maps[wrapper.dataset.accordionId]) {
+          wrapper.querySelector('.panel').style.display = 'block';
+          wrapper.querySelector('.accordion').setAttribute('aria-expanded','true');
       }
   });
 
   computeAll();
-  window.addEventListener('beforeunload', ()=> saveState(true));
 }
 
-/* ===========================
-   6. UI Logic
-   =========================== */
-function updateLayoutMode(mode) {
-    const isFollowUp = (mode === 'followup');
-    const pasteWrapper = $('dmrPasteWrapper');
-    const riskSections = document.querySelectorAll('details.risk-section');
-    const accordionBtn = document.querySelector('.accordion[aria-controls="panel_bloods"]');
-    const accordionPanel = $('#panel_bloods');
-
-    if(isFollowUp) {
-        pasteWrapper.style.display = 'block';
-        if(accordionPanel) {
-            accordionPanel.style.display = 'block'; 
-            if(accordionBtn) {
-                 accordionBtn.setAttribute('aria-expanded', 'true'); 
-                 accordionBtn.querySelector('.icon').textContent = '[-]';
-            }
-        }
-        riskSections.forEach(d => {
-            if(!d.hasAttribute('user-interacted')) d.removeAttribute('open');
-        });
+function handleSegmentClick(id, value, btnClicked) {
+    const group = $(`seg_${id}`);
+    if(btnClicked && btnClicked.classList.contains('active')) {
+        btnClicked.classList.remove('active'); value = null;
     } else {
-        pasteWrapper.style.display = 'none';
-        riskSections.forEach(d => d.setAttribute('open', 'true'));
-        disableCompactMode();
-    }
-}
-
-function handleSegmentClick(id, value) {
-    const noteWrapper = $(id + '_note_wrapper');
-    if(noteWrapper) {
-        noteWrapper.style.display = (value === "true") ? 'block' : 'none';
+        group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        if(btnClicked) btnClicked.classList.add('active');
     }
     
-    if (id === 'infection') {
-        $('infectionMarkers').style.display = (value === "true") ? 'block' : 'none';
-    }
+    const noteWrapper = $(id + '_note_wrapper');
+    if(noteWrapper) noteWrapper.style.display = (value === "true") ? 'block' : 'none';
+    
+    if (id === 'infection') $('infectionMarkers').style.display = (value === "true") ? 'block' : 'none';
     if (id === 'pressors') {
         const sub = $('sub_pressors_reason');
-        if(value === "true") {
-            sub.style.display = 'block';
-            sub.classList.add('show');
-        } else {
-            sub.style.display = 'none';
-            sub.classList.remove('show');
-        }
+        sub.style.display = (value === "true") ? 'block' : 'none';
+        if(value === "true") sub.classList.add('show');
     }
     if (id === 'intubated') {
         const sub = $('sub_intubated_reason');
-        if(value === "true") {
-            sub.style.display = 'block';
-            sub.classList.add('show');
-        } else {
-            sub.style.display = 'none';
-            sub.classList.remove('show');
-        }
+        sub.style.display = (value === "true") ? 'block' : 'none';
+        if(value === "true") sub.classList.add('show');
     }
+    computeAllAndSave();
+}
+
+/* ===========================
+   6. Logic Helpers
+   =========================== */
+function updateLayoutMode(mode) {
+    const isFollowUp = (mode === 'followup');
+    $('dmrPasteWrapper').style.display = isFollowUp ? 'block' : 'none';
+    document.querySelectorAll('details.risk-section').forEach(d => {
+        if(!isFollowUp) d.setAttribute('open', 'true');
+    });
+    if(!isFollowUp) disableCompactMode();
 }
 
 function updateWardOptions() {
-    let type = 'post';
-    const checked = document.querySelector('input[name="reviewType"]:checked');
-    if(checked) type = checked.value;
-
+    let type = document.querySelector('input[name="reviewType"]:checked')?.value || 'post';
     const wardSelect = $('ptWard');
     const currentVal = wardSelect.value;
-    
-    wardSelect.innerHTML = '<option value="" selected disabled>Select Ward...</option>';
-    
-    let options = [];
-    if (type === 'pre') {
-        options = ['ICU Pod 1', 'ICU Pod 2', 'ICU Pod 3', 'ICU Pod 4'];
-    } else {
-        options = [
-            '3A','3B','3C','3D',
-            '4A','4B','4C','4D',
-            '5A','5B','5C','5D',
-            '6A','6B','6C','6D',
-            '7A','7B','7C','7D',
-            'SRS2A','SRS1A','SRSA','SRSB',
-            'Medihotel 8','Medihotel 7','Medihotel 6','Medihotel 5',
-            'Short Stay','Transit Lounge',
-            'Mental Health Adult','Mental Health Youth'
-        ];
-    }
+    wardSelect.innerHTML = '<option value="" selected disabled>Select...</option>';
+    let options = (type === 'pre') ? ['ICU Pod 1', 'ICU Pod 2', 'ICU Pod 3', 'ICU Pod 4'] :
+        ['3A','3B','3C','3D','4A','4B','4C','4D','5A','5B','5C','5D','6A','6B','6C','6D','7A','7B','7C','7D','SRS2A','SRS1A','SRSA','SRSB','Medihotel 8','Medihotel 7','Medihotel 6','Medihotel 5','Short Stay','Transit Lounge','Mental Health Adult','Mental Health Youth'];
     options.push('Other');
-    
-    options.forEach(opt => {
-        const o = document.createElement('option');
-        o.value = opt;
-        o.textContent = opt;
-        wardSelect.appendChild(o);
-    });
-    
-    if (options.includes(currentVal)) {
-        wardSelect.value = currentVal;
-    } else if (currentVal === 'Other') {
-        wardSelect.value = 'Other';
-    }
+    options.forEach(opt => { const o = document.createElement('option'); o.value = opt; o.textContent = opt; wardSelect.appendChild(o); });
+    if (options.includes(currentVal)) wardSelect.value = currentVal;
     updateWardOtherVisibility();
 }
 
 function toggleNeuroFields() {
-    const group = $('neuroConcern');
-    const active = group.querySelector('.select-btn.active');
-    const typeGroup = $('neuroType');
-    const noteWrapper = $('neuroConcern_note_wrapper');
-    
-    if (active && active.dataset.value !== 'none') {
-        typeGroup.style.display = 'flex';
-        noteWrapper.style.display = 'block';
-    } else {
-        typeGroup.style.display = 'none';
-        noteWrapper.style.display = 'none';
-    }
+    const val = $('neuroConcern').querySelector('.active')?.dataset.value;
+    $('neuroType').style.display = (val && val !== 'none') ? 'flex' : 'none';
+    $('neuroConcern_note_wrapper').style.display = (val && val !== 'none') ? 'block' : 'none';
 }
 
 function toggleOxyFields() {
@@ -998,28 +740,14 @@ function toggleOxyFields() {
 }
 
 function toggleInfusionsBox() {
-    let reviewType = 'post';
-    const r = document.querySelector('input[name="reviewType"]:checked');
-    if(r) reviewType = r.value;
-    $('infusions_wrapper').style.display = (reviewType === 'pre') ? 'grid' : 'none';
+    const type = document.querySelector('input[name="reviewType"]:checked')?.value;
+    $('infusions_wrapper').style.display = (type === 'pre') ? 'grid' : 'none';
 }
 
 function toggleBowelDate(mode) {
-    const wrapper = $('bowel_date_wrapper');
-    const label = $('bowel_date_label');
-    const aperients = $('aperients_wrapper');
-    if (!mode) {
-        wrapper.style.display = 'none';
-        return;
-    }
-    wrapper.style.display = 'block';
-    label.textContent = (mode === 'btn_bno') ? 'Date Last Opened' : 'Date BO';
-    if(mode === 'btn_bno') {
-        aperients.style.display = 'block';
-    } else {
-        aperients.style.display = 'none';
-        $('chk_aperients').checked = false; // reset check if switching
-    }
+    $('bowel_date_wrapper').style.display = mode ? 'block' : 'none';
+    if(mode) $('bowel_date_label').textContent = (mode === 'btn_bno') ? 'Date Last Opened' : 'Date BO';
+    $('aperients_wrapper').style.display = (mode === 'btn_bno') ? 'block' : 'none';
 }
 
 function updateNLR() {
@@ -1032,297 +760,151 @@ function updateNLR() {
     if (nlr > 10) nlrCalc.classList.add('status', 'red');
     else if (nlr >=5) nlrCalc.classList.add('status', 'amber');
     return num(nlr);
-  } else {
-    nlrCalc.textContent = `NLR: --`;
-    nlrCalc.className = '';
-    return null;
-  }
-}
-
-function updateSingleBloodFlag(key, value) {
-    const range = normalRanges[key];
-    if(!range) return;
-    const inputEl = $(`bl_${key}`);
-    const rangeEl = $(`bl_${key}_range`);
-    if (inputEl) {
-        let isAbnormal = false;
-        if (key === 'egfr') {
-            isAbnormal = (value !== null && value < range.low);
-        } else {
-            isAbnormal = value !== null && (value < range.low || value > range.high);
-        }
-        inputEl.classList.toggle('blood-abnormal', isAbnormal);
-        if (rangeEl) {
-            if(isAbnormal){
-              rangeEl.textContent = key === 'egfr' ? `(Target: >${range.low})` : `(Normal: ${range.low}-${range.high})`;
-              rangeEl.style.display = 'block';
-            } else {
-              rangeEl.style.display = 'none';
-            }
-        }
-    }
-}
-
-function updateBloodFlags(s) {
-  for (const key of Object.keys(normalRanges)) {
-    updateSingleBloodFlag(key, num(s[`bl_${key}`]));
-  }
+  } else { nlrCalc.textContent = `NLR: --`; return null; }
 }
 
 function updateWardOtherVisibility() {
-    const wardSelect = $('ptWard');
-    const otherWrapper = $('ptWardOtherWrapper');
-    if (wardSelect && otherWrapper) {
-        otherWrapper.style.display = (wardSelect.value === 'Other') ? 'block' : 'none';
-    }
+    $('ptWardOtherWrapper').style.display = ($('ptWard').value === 'Other') ? 'block' : 'none';
 }
 
 function calculateTimeOnWard(dateStr, timeOfDay) {
   if (!dateStr) return { text: null, hours: null };
   const timeMap = { 'Morning': 9, 'Afternoon': 15, 'Evening': 18, 'Night': 21 };
-  const stepdownHour = timeMap[timeOfDay] || 12;
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const stepdownDate = new Date(year, month - 1, day, stepdownHour, 0, 0);
+  const stepdownDate = new Date(`${dateStr}T${(timeMap[timeOfDay]||12).toString().padStart(2,'0')}:00:00`);
   if (isNaN(stepdownDate.getTime())) return { text: null, hours: null };
-  
-  const diffMs = new Date().getTime() - stepdownDate.getTime();
-  const diffHours = diffMs / 3600000;
-  if (diffHours < 0) return { text: '(future date)', hours: diffHours };
-
-  let text;
-  if (diffHours < 24) {
-      text = `${Math.round(diffHours)} hours`;
-  } else if (diffHours < 72) {
-      const days = (Math.round((diffHours / 24) * 2) / 2);
-      text = `${days} day${days === 1 ? '' : 's'}`;
-  } else {
-      const days = Math.round(diffHours / 24);
-      text = `${days} day${days === 1 ? '' : 's'}`;
-  }
-  return { text: text, hours: diffHours };
+  const diffHours = (new Date().getTime() - stepdownDate.getTime()) / 3600000;
+  if (diffHours < 0) return { text: '(future)', hours: diffHours };
+  const days = Math.round(diffHours / 24);
+  const text = (diffHours < 24) ? `${Math.round(diffHours)} hrs` : `${days} day${days===1?'':'s'}`;
+  return { text, hours: diffHours };
 }
 
 /* ===========================
-   7. Compute & Summary
+   7. Compute & Summary (RESTORED)
    =========================== */
+function generateSummary(s, cat, location, wardTimeText, red, amber) {
+    const role = s.clinicianRole || "ALERT CNS";
+    const title = (s.reviewType === 'pre') ? "ALERT Pre-Stepdown Review" : "ALERT Post-Stepdown Review";
+    const date = new Date().toLocaleDateString('en-AU', {day:'2-digit', month:'2-digit', year:'2-digit'});
+    const time = new Date().toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit', hour12:false});
+    
+    let text = `*** ${title} ***\n`;
+    text += `Date: ${date} ${time}\n`;
+    text += `Clinician: ${role}\n`;
+    text += `Patient: ${s.ptName||'--'} (${s.ptMrn||'--'})\n`;
+    text += `Location: ${location}\n`;
+    if(wardTimeText) text += `Time on Ward: ${wardTimeText}\n`;
+    if(s.ptAdmissionReason) text += `Adm Reason: ${s.ptAdmissionReason}\n`;
+    if(s.icuLos) text += `ICU LOS: ${s.icuLos} days\n`;
+    if(s.goc_note) text += `GOC: ${s.goc_note}\n`;
+    
+    text += `\n--- RISK ASSESSMENT: ${cat.text} ---\n`;
+    if(red.length > 0) red.forEach(f => text += `[CAT 1] ${f}\n`);
+    if(amber.length > 0) amber.forEach(f => text += `[CAT 2] ${f}\n`);
+    if(red.length === 0 && amber.length === 0) text += "No specific risk factors identified.\n";
+    
+    text += `\n--- OBSERVATIONS ---\n`;
+    if(s.adds) text += `ADDS: ${s.adds}\n`;
+    if(s.airway_a) text += `A: ${s.airway_a}\n`;
+    
+    let b = [];
+    if(s.b_rr) b.push(`RR ${s.b_rr}`);
+    if(s.b_spo2) b.push(`SpO2 ${s.b_spo2}%`);
+    if(s.b_device) b.push(s.b_device);
+    if(s.b_wob) b.push(s.b_wob);
+    if(b.length) text += `B: ${b.join(', ')}\n`;
+    
+    let c = [];
+    if(s.c_hr) c.push(`HR ${s.c_hr} (${s.c_hr_rhythm||'unspecified'})`);
+    if(s.c_nibp) c.push(`BP ${s.c_nibp}`);
+    if(s.c_cr) c.push(`CR ${s.c_cr}`);
+    if(c.length) text += `C: ${c.join(', ')}\n`;
+    
+    let d = [];
+    if(s.d_alert) d.push(s.d_alert);
+    if(s.d_pain) d.push(`Pain: ${s.d_pain}`);
+    if(d.length) text += `D: ${d.join(', ')}\n`;
+    
+    let e = [];
+    if(s.e_temp) e.push(`T ${s.e_temp}`);
+    if(s.e_bsl) e.push(`BSL ${s.e_bsl}`);
+    if(s.e_uop) e.push(`UOP ${s.e_uop}`);
+    if(e.length) text += `E: ${e.join(', ')}\n`;
+    
+    if(s.ae_diet) text += `Diet: ${s.ae_diet}\n`;
+    if(s.ae_mobility) text += `Mobility/Skin: ${s.ae_mobility}\n`;
+    
+    let devs = [];
+    if(s.devices) Object.entries(s.devices).forEach(([k, vals]) => vals.forEach(v => devs.push(`${k}: ${v}`)));
+    if(devs.length) text += `Devices: ${devs.join(', ')}\n`;
+    
+    // Bloods
+    let bl = [];
+    if(s.bl_hb) bl.push(`Hb ${s.bl_hb}`);
+    if(s.bl_wcc) bl.push(`WCC ${s.bl_wcc}`);
+    if(s.bl_crp) bl.push(`CRP ${s.bl_crp}`);
+    if(s.bl_cr_review) bl.push(`Cr ${s.bl_cr_review}`);
+    if(s.bl_k) bl.push(`K ${s.bl_k}`);
+    if(s.bl_mg) bl.push(`Mg ${s.bl_mg}`);
+    if(s.bl_lac_review) bl.push(`Lac ${s.bl_lac_review}`);
+    if(bl.length) text += `\nBloods: ${bl.join(', ')}\n`;
+
+    text += `\n--- PLAN ---\n`;
+    const plan = $('followUpInstructions').textContent;
+    text += `${plan}\n`;
+    
+    if(s.chk_medical_rounding) text += "- Added to ALERT Medical Rounding List\n";
+    if(s.chk_discharge_alert) text += "- Discharged from ALERT List\n";
+    
+    $('summary').value = text;
+}
+
 function computeAll() {
   const s = getState();
-  
-  const airwayText = getAirwayDeviceText(s);
-  const airwayEl = $('airway_a');
-  if (airwayEl.dataset.manual !== "true" && airwayText) {
-      airwayEl.value = airwayText; s.airway_a = airwayText;
-  }
-  
-  const oxyDeviceText = getOxyDeviceText(s);
-  const bDeviceEl = $('b_device');
-  if (bDeviceEl.dataset.manual !== "true") {
-      bDeviceEl.value = oxyDeviceText; s.b_device = oxyDeviceText;
-  }
-  
   const red = [], amber = [];
-  const flaggedElements = { red: [], amber: [] };
-  const addRisk = (list, text, note, elementId, flagType) => {
-    if (note && note.trim()) list.push(`${text} (${note.trim()})`);
-    else list.push(text);
-    if (elementId && flagType) flaggedElements[flagType].push(elementId);
+  
+  // Logic
+  if (num(s.adds) >= 4) red.push(`ADDS ${s.adds}`);
+  else if (num(s.adds) === 3) amber.push(`ADDS 3`);
+  
+  if (s.immobility) amber.push(`Immobility >48h`);
+  if (num(s.npFlow) >= 3) red.push(`NP Flow ${s.npFlow}L`);
+  if (s.intubated) {
+      if($('intubatedReason').querySelector('.active')?.dataset.value === 'concern') red.push("Recent Intubation (Concern)");
+      else amber.push("Recent Intubation (Routine)");
   }
+  if (num(s.lactate) > 2.5) red.push(`Lactate ${s.lactate}`);
+  if (s.neuroConcern === 'severe') red.push('Severe Neuro Concern');
+  if (s.dyspneaConcern === 'severe') red.push('Severe Resp Concern');
+  if (s.infection) red.push("Infection Concern");
+  if (s.override === 'red') red.push("Clinical Override: CAT 1");
+  if (s.override === 'amber') amber.push("Clinical Override: CAT 2");
 
-  const ward = s.ptWard === 'Other' ? s.ptWardOther : s.ptWard;
-  const location = [ward, s.ptBed].filter(Boolean).join(' ').trim();
+  const cat = (red.length > 0) ? {id: 'red', text: 'CAT 1'} : (amber.length > 0) ? {id: 'amber', text: 'CAT 2'} : {id: 'green', text: 'CAT 3'};
   
-  // ADDS Score
-  const adds = num(s.adds);
-  if (adds !== null) {
-      const timeData = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
-      const hours = timeData.hours || 0;
-      const addsTrend = s['adds_trend'] || '';
-      
-      if (adds >= 4) {
-          red.push(`ADDS ${adds}`); 
-          flaggedElements.red.push('adds');
-      } 
-      else if (adds === 3) {
-          if (hours < 24) {
-              amber.push(`ADDS 3 (<24h stepdown)`);
-              flaggedElements.amber.push('adds');
-          } else {
-              if (addsTrend !== '→' && addsTrend !== '↓') {
-                  amber.push(`ADDS 3 (Trend: ${addsTrend || 'Unspecified'})`);
-                  flaggedElements.amber.push('adds');
-              }
-          }
-      }
-  }
-
-  // Flags
-  const icuLos = num(s.icuLos);
-  const immobility = s.immobility === true;
-  const pressorReason = $('pressorReason').querySelector('.active')?.dataset.value;
-  const pressorsRed = (s.pressors === true && pressorReason === 'shock');
-  const pressorsAmber = (s.pressors === true && pressorReason === 'routine');
-  const lactateVal = num(s.lactate);
-  
-  if (immobility) addRisk(amber, 'Immobility >48h', s.immobility_note, 'seg_immobility', 'amber');
-
-  // Oxygen
-  const oxModGroup = $('oxMod');
-  if (s.oxMod === 'NP') {
-    const flow = num(s.npFlow);
-    if (flow !== null && flow >= 3) { red.push(`NP flow ${flow} L/min`); flaggedElements.red.push(oxModGroup.id); flaggedElements.red.push('npFlow'); }
-    else if (flow !== null && flow >= 2) { amber.push(`NP flow ${flow} L/min`); flaggedElements.amber.push(oxModGroup.id); flaggedElements.amber.push('npFlow');}
-  } else if (s.oxMod === 'HFNP') {
-    const fio2 = num(s.hfnpFio2), flow = num(s.hfnpFlow);
-    if (fio2 > 30 || flow > 30) { red.push(`HFNP concern`); flaggedElements.red.push(oxModGroup.id); }
-    else if ((fio2 > 21) || (flow > 0)) { amber.push('On HFNP (low settings)'); flaggedElements.amber.push(oxModGroup.id); }
-  } else if (s.oxMod === 'NIV') {
-    red.push('On NIV'); flaggedElements.red.push(oxModGroup.id);
-  } else if (s.oxMod === 'Trache') {
-      const ts = s.tracheStatus;
-      if (ts === 'New') addRisk(red, s.tracheType||'Trache', null, 'oxMod', 'red');
-      else addRisk(amber, s.tracheType||'Trache', null, 'oxMod', 'amber');
-  }
-
-  // Historical O2
-  if (s.hist_o2 === true) addRisk(red, 'Historical high O2/NIV', s.hist_o2_note, 'seg_hist_o2', 'red');
-  
-  if (s.intubated === true) {
-      const reason = $('intubatedReason').querySelector('.active')?.dataset.value;
-      let label = 'Intubated in last 24h';
-      if (reason === 'concern') addRisk(red, `${label} (Concerns)`, s.intubation_details, 'seg_intubated', 'red');
-      else addRisk(amber, `${label} (Routine/Elective)`, s.intubation_details, 'seg_intubated', 'amber');
-  }
-
-  if (s.rapid_wean === true) addRisk(red, 'Rapid oxygen wean in last 12h', s.rapid_wean_note, 'seg_rapid_wean', 'red');
-  
-  if (s.after_hours === true) addRisk(amber, 'Discharged after-hours', s.after_hours_note, 'seg_after_hours', 'amber');
-  
-  if (pressorsRed) addRisk(red, 'Vasopressors required (Shock/Complicated)', s.pressors_note, 'seg_pressors', 'red');
-  else if (pressorsAmber) addRisk(amber, 'Vasopressors (Routine/Short term)', s.pressors_note, 'seg_pressors', 'amber');
-
-  if (lactateVal > 2.5) { red.push(`Lactate ${lactateVal}`); flaggedElements.red.push('lactate');}
-  else if (lactateVal >= 2.0) { amber.push(`Lactate ${lactateVal}`); flaggedElements.amber.push('lactate');}
-  
-  if (s.uop === true) addRisk(red, 'UOP concerning / downtrending', s.uop_note, 'seg_uop', 'red');
-  if (s.renal === true) addRisk(red, 'Renal Concern', s.renal_note, 'seg_renal', 'red');
-  
-  if (s.neuroConcern === 'severe') addRisk(red, 'Severe Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
-  else if (s.neuroConcern === 'mod') addRisk(red, 'Moderate Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
-  else if (s.neuroConcern === 'mild') addRisk(amber, 'Mild Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'amber');
-  
-  if (s.electrolyteConcern === 'severe') addRisk(red, 'Severe electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'red');
-  else if (s.electrolyteConcern === 'mild') addRisk(amber, 'Electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'amber');
-
-  if (s.dyspneaConcern === 'severe') addRisk(red, 'Severe respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
-  else if (s.dyspneaConcern === 'mod') addRisk(red, 'Moderate respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
-  else if (s.dyspneaConcern === 'mild') addRisk(amber, 'Mild respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'amber');
-
-  const hb = num(s.hb);
-  if (hb !== null && hb <= 70) { red.push(`Anemia concern (Hb ${hb})`); flaggedElements.red.push('hb'); }
-  else if (hb !== null && hb <= 100 && s.hb_dropping === true) { 
-      amber.push(`Anemia concern (Hb ${hb}, dropping)`); 
-      flaggedElements.amber.push('hb'); flaggedElements.amber.push('seg_hb_dropping');
-  }
-
-  const comorbIds = ['comorb_copd','comorb_hf','comorb_esrd','comorb_diabetes','comorb_cirrhosis', 'comorb_other'];
-  const comorbCount = comorbIds.filter(id => s[id] === true).length;
-  if (comorbCount >= 3) { 
-      red.push('Multiple comorbidities'); 
-      comorbIds.forEach(id => {if(s[id]) flaggedElements.red.push('toggle_'+id) });
-  }
-  else if (comorbCount > 0) { 
-      amber.push(`Comorbidity burden`); 
-      comorbIds.forEach(id => {if(s[id]) flaggedElements.amber.push('toggle_'+id) });
-  }
-
-  if (s.infection === true) {
-     const wcc = num(s.wcc), crp = num(s.crp), nlr = updateNLR();
-     let markerParts = [];
-     let hasRedMarker = false, hasAmberMarker = false;
-     if (wcc !== null && (wcc < 4 || wcc > 11)) { markerParts.push(`WCC ${wcc}`); hasRedMarker = true; }
-     if (crp > 100) { markerParts.push(`CRP ${crp}`); hasRedMarker = true; }
-     else if (crp > 50) { markerParts.push(`CRP ${crp}`); hasAmberMarker = true; }
-     if (nlr > 10) { markerParts.push(`NLR ${nlr}`); hasRedMarker = true; }
-     else if (nlr >= 5) { markerParts.push(`NLR ${nlr}`); hasAmberMarker = true; }
-     
-     let baseText = 'Infection Concern';
-     if(markerParts.length) baseText += `: High markers (${markerParts.join(', ')})`;
-     
-     let cat = hasRedMarker ? 'red' : (hasAmberMarker ? 'amber' : 'red'); 
-     addRisk(cat === 'red' ? red : amber, baseText, s.infection_note, 'seg_infection', cat);
-  }
-
-  const overrideNote = $('overrideNote')?.value ? ` (${$('overrideNote').value})` : '';
-  if ($('override').value === 'red') red.push(`Override: CAT 1 concern${overrideNote}`);
-  else if ($('override').value === 'amber') amber.push(`Override: CAT 2 concern${overrideNote}`);
-
-  updateBloodFlags(s);
-  
-  if (icuLos > 5 && (red.length > 0 || amber.length > 0)) {
-      red.push(`ICU LOS ${icuLos} days (Escalated due to presence of other risks)`);
-  }
-
-  const redCount = red.length;
-  const amberCount = amber.length;
-  const cat = (redCount > 0) ? {id: 'red', text: 'CAT 1', catNum: 1} : (amberCount > 0) ? {id: 'amber', text: 'CAT 2', catNum: 2} : {id: 'green', text: 'CAT 3', catNum: 3};
-  
-  $('redCount').textContent = redCount;
-  $('amberCount').textContent = amberCount;
-  $('redCount').style.color = redCount > 0 ? 'var(--red)' : 'var(--ink)';
-  $('amberCount').style.color = amberCount > 0 ? 'var(--amber)' : 'var(--ink)';
-  
-  const catTextEl = $('catText');
-  catTextEl.className = 'status ' + cat.id;
-  catTextEl.textContent = cat.text;
+  // Update UI
+  $('redCount').textContent = red.length; $('redCount').style.color = red.length?'var(--red)':'inherit';
+  $('amberCount').textContent = amber.length; $('amberCount').style.color = amber.length?'var(--amber)':'inherit';
+  $('catText').className = 'status ' + cat.id; $('catText').textContent = cat.text;
   $('categoryBox').style.borderColor = `var(--${cat.id})`;
-
-  const flagListEl = $('flagList');
-  if (redCount > 0 || amberCount > 0) {
-      const redFlagsHTML = red.map(f => `<div style="color:var(--red); font-weight:600; margin:6px 0;">[CAT 1] ${f}</div>`);
-      const amberFlagsHTML = amber.map(f => `<div style="color:var(--amber); font-weight:600; margin:6px 0;">[CAT 2] ${f}</div>`);
-      flagListEl.innerHTML = [...redFlagsHTML, ...amberFlagsHTML].join('');
-  } else {
-      flagListEl.innerHTML = `<div style="color:var(--muted)">No risk factors identified</div>`;
-  }
+  $('footerScore').className = `footer-score tag ${cat.id}`; $('footerScore').textContent = cat.text;
   
-  document.querySelectorAll('.flag-red, .flag-amber').forEach(el => el.classList.remove('flag-red', 'flag-amber'));
-  flaggedElements.red.forEach(id => { const el=$(id); if(el) el.classList.add('flag-red'); });
-  flaggedElements.amber.forEach(id => { const el=$(id); if(el) el.classList.add('flag-amber'); });
-
-  const followUpEl = $('followUpInstructions');
-  let followUpHTML = '';
-  if (s.chk_discharge_alert === true) {
-      followUpHTML = `<div class="status" style="color:var(--blue-hint);">Discharge from ALERT nursing post ICU review list.</div>`;
-  } else if (cat.id === 'red') {
-      followUpHTML = `<div class="status red">${redCount >= 3 ? 'Twice-daily' : 'At least daily'} ALERT review for up to 72h post-ICU stepdown.</div>`;
-  } else if (cat.id === 'amber') {
-      followUpHTML = `<div class="status amber">Once-daily ALERT review for up to 48h post-ICU stepdown.</div>`;
-  } else {
-      followUpHTML = `<div class="status green">Single ALERT review on ward to ensure continued stability.</div>`;
-  }
-  followUpEl.innerHTML = followUpHTML;
+  const flagHTML = [...red.map(r=>`<div style="color:var(--red)">[CAT 1] ${r}</div>`), ...amber.map(a=>`<div style="color:var(--amber)">[CAT 2] ${a}</div>`)].join('');
+  $('flagList').innerHTML = flagHTML || `<div style="color:var(--muted)">No specific risks</div>`;
   
-  const wardTime = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
-  const nudgeEl = $('dischargeNudge');
-  nudgeEl.style.display = 'none';
-  if (wardTime.hours !== null && wardTime.hours > 0 && s.chk_discharge_alert !== true) {
-      let nudgeText = '';
-      if (cat.id === 'red' && wardTime.hours >= 72) nudgeText = `Patient stepped down ${wardTime.text} ago (CAT 1 ≥ 72h). Consider discharge.`;
-      else if (cat.id === 'amber' && wardTime.hours >= 48) nudgeText = `Patient stepped down ${wardTime.text} ago (CAT 2 ≥ 48h). Consider discharge.`;
-      else if (cat.id === 'green' && wardTime.hours >= 24) nudgeText = `Patient stepped down ${wardTime.text} ago (CAT 3 ≥ 24h). Consider discharge.`;
-      
-      if(nudgeText) { nudgeEl.textContent = nudgeText; nudgeEl.style.display = 'block'; }
-  }
+  let fu = "";
+  if(s.chk_discharge_alert) fu = "Discharge from ALERT list.";
+  else if(cat.id === 'red') fu = "Twice-daily ALERT review (up to 72h).";
+  else if(cat.id === 'amber') fu = "Daily ALERT review (up to 48h).";
+  else fu = "Single review. Discharge if stable.";
+  $('followUpInstructions').textContent = fu;
 
+  const wt = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
   $('footerName').textContent = s.ptName || '--';
-  $('footerLocation').textContent = location || '--';
+  $('footerLocation').textContent = `${s.ptWard||''} ${s.ptBed||''}`;
   $('footerAdmission').textContent = s.ptAdmissionReason || '--';
-  const scoreEl = $('footerScore');
-  scoreEl.className = `footer-score tag ${cat.id}`;
-  const flagCount = redCount > 0 ? redCount : amberCount;
-  scoreEl.textContent = `${cat.text}${flagCount>0 ? ` (${flagCount} Flag${flagCount>1?'s':''})` : ''}`;
-
-  generateSummary(s, cat, location, wardTime.text, red, amber);
+  
+  generateSummary(s, cat, `${s.ptWard||''} ${s.ptBed||''}`, wt.text, red, amber);
 }
 
 /* ===========================
@@ -1394,6 +976,4 @@ function openRedcapAccelerator() {
     window.open(finalUrl, '_blank');
 }
 
-document.addEventListener('DOMContentLoaded', ()=> {
-  initialize();
-});
+document.addEventListener('DOMContentLoaded', ()=> initialize());
