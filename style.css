@@ -18,7 +18,7 @@ header h1 .logo-em { color: var(--red); margin: 0 4px; font-weight: 800; }
 
 /* --- Layout & Grid --- */
 .container{max-width:980px; margin:10px auto; padding:10px;}
-.grid{display:grid; grid-template-columns:repeat(12,1fr); column-gap:8px; row-gap:12px;} /* Tightened gaps */
+.grid{display:grid; grid-template-columns:repeat(12,1fr); column-gap:8px; row-gap:12px;}
 .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);}
 
 .col-2{grid-column:span 2}.col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-8{grid-column:span 8}.col-12{grid-column:span 12}
@@ -34,19 +34,6 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 
 .concern-note { margin-top: 6px; }
 .concern-note textarea { min-height: 38px; font-size: 0.9rem; }
-
-/* --- Scraped Data Styling (The Blue Request) --- */
-.scraped-data {
-    color: var(--blue-hint) !important;
-    font-weight: 700;
-    border-color: var(--blue-hint) !important;
-    background-color: rgba(37, 99, 235, 0.04) !important;
-}
-.scraped-placeholder::placeholder {
-    color: var(--blue-hint) !important;
-    font-weight: 600;
-    opacity: 0.8;
-}
 
 /* --- Buttons --- */
 .btn, .override-btn, .select-btn, .seg-btn { background-color: var(--bg); color: var(--muted); border: 1px solid var(--line); padding: 6px 10px; border-radius: 8px; cursor:pointer; font-weight: 600; transition: all 0.15s; min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.9rem;}
@@ -75,33 +62,11 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .toggle-label .state { font-weight:700; font-size:0.85rem; color:var(--muted); }
 .toggle-label.active .state { color: #fff; }
 
-/* --- Accordions (New Minimise Logic) --- */
-details.risk-section {
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    margin-bottom: 10px;
-    background: var(--bg);
-    overflow: hidden;
-}
-details.risk-section summary {
-    padding: 12px 16px;
-    font-weight: 700;
-    cursor: pointer;
-    background: var(--input-bg);
-    list-style: none; /* Hide default triangle */
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 1rem;
-    color: var(--ink);
-}
+/* --- Accordions --- */
+details.risk-section { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: var(--bg); overflow: hidden; }
+details.risk-section summary { padding: 12px 16px; font-weight: 700; cursor: pointer; background: var(--input-bg); list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; color: var(--ink); }
 details.risk-section summary::-webkit-details-marker { display: none; }
-details.risk-section summary::after {
-    content: '+'; 
-    font-weight: 800; 
-    color: var(--muted);
-    font-size: 1.2rem;
-}
+details.risk-section summary::after { content: '+'; font-weight: 800; color: var(--muted); font-size: 1.2rem; }
 details.risk-section[open] summary { border-bottom: 1px solid var(--line); }
 details.risk-section[open] summary::after { content: '-'; }
 .risk-content { padding: 16px; background: var(--card); }
@@ -113,20 +78,7 @@ details.risk-section[open] summary::after { content: '-'; }
 .sub-question-wrapper { margin-left: 14px; padding-left: 12px; border-left: 2px solid var(--line); margin-bottom: 10px; display: none; margin-top:8px;}
 .sub-question-wrapper.show { display: block; animation: fadeIn .2s; }
 
-/* --- Previous Risk Badge --- */
-.prev-risk-text {
-    font-size: 0.8rem;
-    color: var(--blue-hint);
-    font-weight: 700;
-    margin-bottom: 6px;
-    display: none; /* JS toggles this */
-    background: rgba(37, 99, 235, 0.08);
-    padding: 4px 8px;
-    border-radius: 4px;
-    border-left: 3px solid var(--blue-hint);
-}
-
-/* --- Grids for Specific Sections --- */
+/* --- Grids --- */
 .comorbidity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
 .bloods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px 12px;}
 .blood-item { display: grid; grid-template-columns: 40px 1fr 60px; align-items: center; gap: 4px; position: relative;}
@@ -135,30 +87,11 @@ details.risk-section[open] summary::after { content: '-'; }
 .trend-buttons { display: flex; justify-self: end;}
 .trend-btn { font-size: 0.8rem; border: 1px solid var(--line); background: transparent; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); padding:0;}
 .trend-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-
 .blood-abnormal { border-color: var(--red) !important; background-color: rgba(239,68,68,.06) !important; }
 .range-annotation { font-size: 0.7rem; color: var(--muted); position: absolute; bottom: -14px; left: 44px; display: none; white-space:nowrap; }
 
-/* --- Ghost Values (Previous Vitals) --- */
-.ghost-val {
-    position: absolute;
-    bottom: -16px;
-    left: 4px;
-    font-size: 0.75rem;
-    color: var(--blue-hint); /* Requested Blue */
-    font-weight: 700;
-    pointer-events: none;
-    white-space: nowrap;
-}
-
 /* --- Paste Box --- */
-.paste-box {
-    background: var(--input-bg);
-    border: 2px dashed var(--accent);
-    padding: 12px;
-    border-radius: 10px;
-    margin-top: 4px;
-}
+.paste-box { background: var(--input-bg); border: 2px dashed var(--accent); padding: 12px; border-radius: 10px; margin-top: 4px; }
 
 /* --- KPI & Footer --- */
 .kpi{display:grid; grid-template-columns: 1.5fr 1fr 1fr; gap:10px;}
@@ -186,7 +119,6 @@ footer { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--car
 hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16px 0; }
 .optional-note { text-align:center; color: var(--muted); font-size: 0.85rem; margin: 14px 0; }
 
-/* --- Old Accordion (For Optional Sections) --- */
 .accordion-wrapper { border: 1px solid var(--line); border-radius: 10px; overflow:hidden; margin-bottom: 10px;}
 .accordion { background-color: transparent; color: var(--ink); cursor: pointer; padding: 12px 14px; width: 100%; border: none; border-bottom: 1px solid var(--line); text-align: left; outline: none; font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:space-between; }
 .accordion .icon { color: var(--muted); font-size:0.9rem; margin-left:8px; }
@@ -194,9 +126,6 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
 
 /* --- Devices --- */
 .device-entry { background: var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; }
-.device-entry[style*="dashed"] { border-color: var(--blue-hint) !important; background: rgba(37, 99, 235, 0.05) !important; }
-.device-entry[style*="dashed"] label { color: var(--blue-hint) !important; }
-
 .device-entry textarea { width:100%; min-height:40px; font-size:0.95rem; background:var(--input-bg); }
 .remove-entry { background: transparent; border:1px solid rgba(239,68,68,0.12); color:var(--red); border-radius:6px; padding:6px; cursor:pointer; text-align:center; font-weight:700; font-size:0.8rem;}
 
@@ -212,13 +141,7 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
 .input-with-trend .trend-buttons { justify-self: end; }
 .quick-select-container { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;}
 
-#panel_ae .col-3, #panel_ae .col-4, #panel_ae .col-12 {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start; 
-    height: 100%;
-}
-
+#panel_ae .col-3, #panel_ae .col-4, #panel_ae .col-12 { display: flex; flex-direction: column; justify-content: flex-start; height: 100%; }
 .flag-red { box-shadow: 0 0 0 2px var(--red); }
 .flag-amber { box-shadow: 0 0 0 2px var(--amber); }
 
@@ -229,54 +152,23 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
   .btn, .select-btn, .seg-btn { padding:8px 10px; font-size:0.95rem; min-height:44px; }
   .segmented-group { max-width: 100%; }
 }
-/* Add this to the bottom of style.css */
 
-/* Compact Mode Styles */
-.compact-hidden {
-    display: none !important;
-}
+/* --- NEW FEATURE STYLES (CRITICAL) --- */
+/* Compact Mode: Actually hides empty fields */
+.compact-hidden { display: none !important; }
 
+/* Toggle Button for Compact Mode */
 #expandFormBtn {
-    width: 100%;
-    margin-top: 20px;
-    padding: 12px;
-    background: var(--line);
-    color: var(--muted);
-    font-weight: 700;
-    border: 2px dashed var(--muted);
-    cursor: pointer;
-    text-align: center;
-    border-radius: 8px;
-    transition: all 0.2s;
-    display: none; /* Hidden by default until compact mode active */
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    width: 100%; margin-top: 20px; padding: 12px; background: var(--line); color: var(--muted);
+    font-weight: 700; border: 2px dashed var(--muted); cursor: pointer; text-align: center; border-radius: 8px;
+    transition: all 0.2s; display: none; align-items: center; justify-content: center; gap: 8px;
 }
-#expandFormBtn:hover {
-    background: var(--input-bg);
-    border-color: var(--accent);
-    color: var(--accent);
-}
-/* --- Scraped Data Styling --- */
-/* Makes text inside the input blue and bold if scraped */
+#expandFormBtn:hover { background: var(--input-bg); border-color: var(--accent); color: var(--accent); }
+
+/* Scraped Data Indicator (Blue Text) */
 .scraped-filled {
     color: var(--blue-hint) !important;
     font-weight: 700 !important;
     background-color: rgba(37, 99, 235, 0.04) !important;
     border-color: var(--blue-hint) !important;
-}
-
-/* The text under the label (Ghost hint) */
-.scraped-hint-text {
-    color: var(--blue-hint);
-    font-size: 0.85rem;
-    font-weight: 700;
-    margin-bottom: 2px;
-    display: block;
-}
-
-/* Ensure placeholder text is distinct if needed */
-.scraped-filled::placeholder {
-    color: rgba(37, 99, 235, 0.4);
 }
