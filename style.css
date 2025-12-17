@@ -1,7 +1,7 @@
 :root{
   --bg:#f0f9f9; --card:#ffffff; --ink:#111827; --muted:#4b5563; --accent:#007a7a;
   --red:#ef4444; --amber:#f59e0b; --green:#10b981; --line:#d1e3e3; --input-bg:#f8fbfb;
-  --blue-hint:#1d4ed8; --toast-bg: rgba(0,0,0,0.8); --toast-color:#fff;
+  --blue-hint:#2563eb; --toast-bg: rgba(0,0,0,0.8); --toast-color:#fff;
 }
 body.dark { --bg:#0b1112; --card:#0f1720; --ink:#e6eef0; --muted:#9aa9ad; --line:#132022; --input-bg:#071018; --blue-hint:#60a5fa; --toast-bg: rgba(255,255,255,0.06); --toast-color:#e6eef0; }
 
@@ -34,6 +34,20 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 
 .concern-note { margin-top: 6px; }
 .concern-note textarea { min-height: 38px; font-size: 0.9rem; }
+
+/* --- Ghost Value Styling (Blue Text) --- */
+.ghost-val {
+    font-size: 0.85rem;
+    color: var(--blue-hint);
+    font-weight: 700;
+    white-space: nowrap;
+    align-self: center;
+}
+/* Fixed data (Demographics) gets a subtle blue bg when filled by scraper */
+.scraped-fixed {
+    background-color: rgba(37, 99, 235, 0.05) !important;
+    border-color: var(--blue-hint) !important;
+}
 
 /* --- Buttons --- */
 .btn, .override-btn, .select-btn, .seg-btn { background-color: var(--bg); color: var(--muted); border: 1px solid var(--line); padding: 6px 10px; border-radius: 8px; cursor:pointer; font-weight: 600; transition: all 0.15s; min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.9rem;}
@@ -78,17 +92,24 @@ details.risk-section[open] summary::after { content: '-'; }
 .sub-question-wrapper { margin-left: 14px; padding-left: 12px; border-left: 2px solid var(--line); margin-bottom: 10px; display: none; margin-top:8px;}
 .sub-question-wrapper.show { display: block; animation: fadeIn .2s; }
 
+.prev-risk-text { font-size: 0.85rem; color: var(--blue-hint); font-weight: 600; margin-bottom: 4px; display: none; }
+
 /* --- Grids --- */
 .comorbidity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
-.bloods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px 12px;}
-.blood-item { display: grid; grid-template-columns: 40px 1fr 60px; align-items: center; gap: 4px; position: relative;}
-.blood-item label { margin-bottom: 0; font-size:0.85rem; color:var(--muted); }
-.blood-item input { font-size:0.9rem; padding: 6px; }
-.trend-buttons { display: flex; justify-self: end;}
-.trend-btn { font-size: 0.8rem; border: 1px solid var(--line); background: transparent; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); padding:0;}
+
+/* RESTRUCTURED BLOODS GRID */
+.bloods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.blood-item { background: var(--bg); padding: 8px; border-radius: 8px; border: 1px solid var(--line); display:flex; flex-direction:column; gap:4px; position:relative; }
+.blood-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; height: 20px;}
+.blood-header label { margin: 0; font-size: 0.8rem; }
+.blood-input-row { display: flex; gap: 4px; }
+.blood-input-row input { flex: 1; min-width: 0; padding: 6px; font-size: 0.95rem; text-align: right; }
+.trend-buttons { display: flex; flex-direction: column; gap: 2px; }
+.trend-btn { font-size: 0.7rem; border: 1px solid var(--line); background: var(--card); border-radius: 4px; width: 24px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); padding:0; line-height:1;}
 .trend-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
 .blood-abnormal { border-color: var(--red) !important; background-color: rgba(239,68,68,.06) !important; }
-.range-annotation { font-size: 0.7rem; color: var(--muted); position: absolute; bottom: -14px; left: 44px; display: none; white-space:nowrap; }
+.range-annotation { font-size: 0.65rem; color: var(--muted); position: absolute; bottom: -16px; left: 0; width:100%; text-align:center; display: none; white-space:nowrap; }
 
 /* --- Paste Box --- */
 .paste-box { background: var(--input-bg); border: 2px dashed var(--accent); padding: 12px; border-radius: 10px; margin-top: 4px; }
@@ -138,7 +159,7 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
 .btn.quick-select { padding: 2px 6px; font-size: 0.75rem; min-height: 26px; background: var(--bg); border-color: var(--line); color: var(--muted); font-weight: 500; }
 .btn.quick-select:hover { background: var(--line); }
 .input-with-trend { display: grid; grid-template-columns: 1fr 70px; gap: 6px; align-items: center; }
-.input-with-trend .trend-buttons { justify-self: end; }
+.input-with-trend .trend-buttons { justify-self: end; flex-direction:row; height:auto; }
 .quick-select-container { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;}
 
 #panel_ae .col-3, #panel_ae .col-4, #panel_ae .col-12 { display: flex; flex-direction: column; justify-content: flex-start; height: 100%; }
@@ -151,24 +172,4 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
   input, textarea { font-size:1rem; padding:10px; }
   .btn, .select-btn, .seg-btn { padding:8px 10px; font-size:0.95rem; min-height:44px; }
   .segmented-group { max-width: 100%; }
-}
-
-/* --- NEW FEATURE STYLES (CRITICAL) --- */
-/* Compact Mode: Actually hides empty fields */
-.compact-hidden { display: none !important; }
-
-/* Toggle Button for Compact Mode */
-#expandFormBtn {
-    width: 100%; margin-top: 20px; padding: 12px; background: var(--line); color: var(--muted);
-    font-weight: 700; border: 2px dashed var(--muted); cursor: pointer; text-align: center; border-radius: 8px;
-    transition: all 0.2s; display: none; align-items: center; justify-content: center; gap: 8px;
-}
-#expandFormBtn:hover { background: var(--input-bg); border-color: var(--accent); color: var(--accent); }
-
-/* Scraped Data Indicator (Blue Text) */
-.scraped-filled {
-    color: var(--blue-hint) !important;
-    font-weight: 700 !important;
-    background-color: rgba(37, 99, 235, 0.04) !important;
-    border-color: var(--blue-hint) !important;
 }
