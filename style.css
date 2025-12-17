@@ -229,3 +229,32 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16
   .btn, .select-btn, .seg-btn { padding:8px 10px; font-size:0.95rem; min-height:44px; }
   .segmented-group { max-width: 100%; }
 }
+/* Add this to the bottom of style.css */
+
+/* Compact Mode Styles */
+.compact-hidden {
+    display: none !important;
+}
+
+#expandFormBtn {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    background: var(--line);
+    color: var(--muted);
+    font-weight: 700;
+    border: 2px dashed var(--muted);
+    cursor: pointer;
+    text-align: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+    display: none; /* Hidden by default until compact mode active */
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+#expandFormBtn:hover {
+    background: var(--input-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+}
