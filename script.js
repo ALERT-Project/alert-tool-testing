@@ -6,9 +6,9 @@ const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); 
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v4.5'; 
-const ACCORDION_KEY = 'alertNursingToolAccordions_v4.5';
-const UNDO_KEY = 'alertNursingToolUndo_v4.5';
+const STORAGE_KEY = 'alertNursingToolData_v4.7'; 
+const ACCORDION_KEY = 'alertNursingToolAccordions_v4.7';
+const UNDO_KEY = 'alertNursingToolUndo_v4.7';
 
 const normalRanges = {
   wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
@@ -58,15 +58,27 @@ const selectInputs = [
 const deviceTypes = ['CVC', 'Other CVAD', 'PIVC', 'PICC Line', 'Enteral Tube', 'IDC', 'Pacing Wire', 'Drain', 'Wound', 'Other Device'];
 
 /* ===========================
-   2. DOM & UI Helpers (Ghost/Hint System)
+   2. DOM & UI Helpers
    =========================== */
 
-// Insert the blue text BEFORE the input (between Label and Box)
+// Fixed: Helper for Quick Select buttons (Stacking text)
+window.stackText = function(id, text) {
+    const el = $(id);
+    if (!el) return;
+    // If empty, set it. If exists, append with comma.
+    if (el.value.trim() === "") {
+        el.value = text;
+    } else if (!el.value.includes(text)) {
+        el.value = el.value + ", " + text;
+    }
+    el.dispatchEvent(new Event('input')); // Trigger save/compute
+};
+
+// Ghost Values
 function setGhostValue(inputId, value) {
     const el = $(inputId);
     if (!el || !value) return;
 
-    // Use a unique ID for the hint so we don't duplicate it
     const hintId = `hint_for_${inputId}`;
     let hint = $(hintId);
 
@@ -74,20 +86,8 @@ function setGhostValue(inputId, value) {
         hint = document.createElement('div');
         hint.id = hintId;
         hint.className = 'scraped-hint-text';
-        
-        // Inline styles for direct placement
-        hint.style.color = 'var(--blue-hint, #0056b3)';
-        hint.style.fontSize = '0.85em';
-        hint.style.fontWeight = '700';
-        hint.style.marginBottom = '2px';
-        hint.style.marginTop = '2px';
-        hint.style.display = 'block'; // Forces it to be on its own line
-        hint.style.width = '100%';    // Ensures it spans the width
-        
-        // Insert BEFORE the input element (This puts it under the label)
         el.parentNode.insertBefore(hint, el);
     }
-    // Just the value, no "Scraped:" text
     hint.textContent = value;
     hint.style.display = 'block';
 }
@@ -97,6 +97,55 @@ function clearGhostValues() {
     document.querySelectorAll('.device-entry[style*="dashed"]').forEach(el => el.remove()); 
 }
 
+/* --- COMPACT MODE LOGIC (NEW) --- */
+function enableCompactMode() {
+    // 1. Identify all column containers (.col-X)
+    const cols = document.querySelectorAll('.grid > div[class*="col-"]');
+    
+    cols.forEach(col => {
+        // Assume hidden unless we find populated data
+        let hasData = false;
+
+        // Check Inputs/Selects/Textareas
+        const inputs = col.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            if (input.type === 'checkbox' || input.type === 'radio') {
+                if (input.checked) hasData = true;
+            } else if (input.value && input.value.trim() !== '') {
+                hasData = true;
+            }
+        });
+
+        // Check active buttons (segmented, select, toggles)
+        if (col.querySelector('.active')) hasData = true;
+        
+        // Check if it contains a ghost hint
+        if (col.querySelector('.scraped-hint-text')) hasData = true;
+        
+        // Check if it contains devices
+        if (col.id === 'devices-container' && col.children.length > 0) hasData = true;
+        if (col.querySelector('#devices-container') && col.querySelector('#devices-container').children.length > 0) hasData = true;
+
+        // Apply visibility
+        if (hasData) {
+            col.classList.remove('compact-hidden');
+        } else {
+            col.classList.add('compact-hidden');
+        }
+    });
+
+    // 2. Hide headers if their section is empty? (Optional optimization, skipping for now to keep it fast)
+    // 3. Show the "Show All" button
+    const expandBtn = $('expandFormBtn');
+    if(expandBtn) expandBtn.style.display = 'flex';
+}
+
+function disableCompactMode() {
+    document.querySelectorAll('.compact-hidden').forEach(el => el.classList.remove('compact-hidden'));
+    const expandBtn = $('expandFormBtn');
+    if(expandBtn) expandBtn.style.display = 'none';
+}
+
 /* --- DEVICE ENTRY LOGIC --- */
 function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     const container = $('devices-container');
@@ -104,31 +153,26 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     div.className = 'device-entry';
     div.dataset.type = type;
     
-    // Standard Entry (User added or Confirmed)
     if (!isGhostCandidate) {
         div.innerHTML = `
             <label>${type}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
-                <textarea style="flex: 1;" placeholder="Enter details for ${type}...">${value}</textarea>
-                <div class="remove-entry" role="button" tabindex="0" style="cursor:pointer; color:var(--red, #d32f2f); font-weight:600;">Remove</div>
+                <textarea style="flex: 1;" placeholder="Enter details...">${value}</textarea>
+                <div class="remove-entry" role="button" tabindex="0">Remove</div>
             </div>
         `;
         container.appendChild(div);
-        
         const ta = div.querySelector('textarea');
         ta.addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
         div.querySelector('.remove-entry').addEventListener('click', () => { div.remove(); computeAll(); saveState(); });
-    } 
-    // Ghost Candidate (Needs Confirmation)
-    else {
-        div.style.border = "2px dashed var(--blue-hint, #0056b3)";
+    } else {
+        div.style.border = "2px dashed var(--blue-hint)";
         div.style.padding = "8px";
         div.style.marginBottom = "8px";
         div.style.borderRadius = "6px";
         div.style.backgroundColor = "rgba(0, 86, 179, 0.05)";
-
         div.innerHTML = `
-            <div style="font-weight:bold; color:var(--blue-hint, #0056b3); margin-bottom:4px;">
+            <div style="font-weight:bold; color:var(--blue-hint); margin-bottom:4px;">
                 ❓ Confirm Device: ${type}
             </div>
             <div style="margin-bottom:8px; font-size:0.9em;">${value}</div>
@@ -138,7 +182,6 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
             </div>
         `;
         container.appendChild(div);
-        
         div.querySelector('.confirm-dev').addEventListener('click', (e) => {
              e.preventDefault();
              div.remove();
@@ -186,24 +229,22 @@ function getAirwayDeviceText(s) {
 }
 
 /* ===========================
-   3. The DMR Scraper
+   3. The DMR Scraper (Major Overhaul)
    =========================== */
 function processDmrNote() {
     const text = $('dmrPasteInput').value;
     if(!text) return;
 
     $('pasteError').style.display = 'none';
-    clearGhostValues(); // Clear old hints
+    clearGhostValues(); 
 
-    const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
-
-    // Helper: decide if we fill the box or show a hint
-    const setScraped = (id, val, forceGhost = false) => {
+    // Helper: Fill value or show hint. 
+    // forceValue = true means "Put this in the box now, don't just show a ghost hint"
+    const setScraped = (id, val, forceValue = false) => {
         const el = $(id);
         if(!el || !val) return;
 
-        // Long notes fill the box, numbers/short text show as hint
-        if (!forceGhost && (id.includes('note') || id === 'ptAdmissionReason' || id === 'goc_note')) {
+        if (forceValue || id.includes('note') || id === 'ptAdmissionReason' || id === 'goc_note' || id === 'pmh_note') {
             el.value = val;
             el.dispatchEvent(new Event('input'));
         } else {
@@ -211,44 +252,90 @@ function processDmrNote() {
         }
     };
 
-    // 1. Context & Demo
+    const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
+
+    // --- 1. Demographics / Context ---
+    const admission = extract(/Admitted post\s*(.*?)(?:\n|$|Not for)/i);
+    if(admission) setScraped('ptAdmissionReason', admission);
+
     const gocMatch = text.match(/(Not for CPR.*?(?:METS\.|For METS|for METS)|NFR.*?|For METS.*?)/i);
     if (gocMatch) setScraped('goc_note', gocMatch[0].trim());
+    
+    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|O\/E:|Social:|ADDS:)/i);
+    if(pmh) setScraped('pmh_note', pmh.trim());
 
-    const adds = extract(/ADDS:\s*(\d+)/i);
+    // --- 2. ADDS & Vital Signs (Specific matching for your format) ---
+    const adds = extract(/ADDS[:\s]+(\d+)/i);
     if(adds) {
-        setScraped('adds', adds, true);
+        // Force value for ADDS score to prevent layout shifting
+        setScraped('adds', adds, true); 
         setScraped('atoe_adds', adds, true);
     }
 
-    // 2. A-E Assessment (Ghosts)
-    const airway = extract(/A:\s*(.*?)(?:,|$|\n)/i);
+    // Vitals Logic (New regexes to catch T37.6, HR 139, etc)
+    const hr = extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i);
+    if(hr) setScraped('c_hr', hr, true);
+
+    const bp = extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i);
+    if(bp) setScraped('c_nibp', bp, true);
+
+    const rr = extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i);
+    if(rr) setScraped('b_rr', rr, true);
+
+    const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(\d+%?)/i);
+    if(spo2) {
+        setScraped('b_spo2', spo2.replace('%',''), true);
+        // Check Room Air
+        if(/SpO2.*?RA|RA.*?SpO2|Room Air/i.test(text)) {
+            const btn = document.querySelector('#oxMod [data-value="RA"]');
+            if(btn) btn.click();
+        }
+    }
+
+    const temp = extract(/(?:Temp|T)\s*[:]?\s*(\d+\.?\d*)/i);
+    if(temp) setScraped('e_temp', temp, true);
+
+    // --- 3. A-E Assessment ---
+    // A
+    const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
     if(airway) setScraped('airway_a', airway, true);
 
-    const wob = extract(/,\s*(nil increased WOB noted|.*?WOB.*?)(?:,|$|\n)/i);
+    // B WOB
+    const wob = extract(/(?:WOB|Work of breathing)[\s\S]{0,20}?(nil increased|increased|moderate|severe|normal)/i);
     if(wob) setScraped('b_wob', wob, true);
 
-    const pain = extract(/D:\s*(.*?)(?:-|,|$|\n)/i);
-    if(pain) setScraped('d_pain', pain, true);
+    // D Pain / Alert
+    const pain = extract(/D:\s*(.*?)(?:-|,|$|\n|E:)/i);
+    if(pain) setScraped('d_pain', pain, true); // Often contains "8/10 pain"
 
-    const bsl = extract(/BSL\s*(\d+\.?\d*)/i);
+    // E BSL / Urine
+    const bsl = extract(/BSL\s*[:]?\s*(\d+\.?\d*)/i);
     if(bsl) setScraped('e_bsl', bsl, true);
-
+    
+    // Diet & Bowels (Generic grabbers)
     const diet = extract(/GIT:\s*(.*?)(?:SKIN|$|\n)/i);
     if(diet) setScraped('ae_diet', diet, true);
 
     const skin = extract(/SKIN:\s*(.*?)(?:Devices|$|\n)/i);
-    if(skin) setScraped('ae_mobility', skin, true);
+    if(skin) setScraped('ae_mobility', skin, true); // Mapping Skin to Mobility/Risk box roughly
 
-    // 3. Bloods (Ghosts)
+    // --- 4. Bloods (Improved Loose Matching) ---
+    // Handles: "Hb 86, lact 1.8" (commas, spaces, no colons)
     const bloodMap = { 
-        'Lac': /Lac(?:tate)?\s*[:]?\s*(\d+\.?\d*)/i, 'Hb': /Hb\s*[:]?\s*(\d+)/i, 
-        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 'CRP': /CRP\s*[:]?\s*(\d+)/i, 
-        'Cr': /Cr\s*[:]?\s*(\d+)/i, 'K': /K\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Na': /Na\s*[:]?\s*(\d+)/i, 'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i, 
-        'Plts': /Plts\s*[:]?\s*(\d+)/i, 'Alb': /Alb\s*[:]?\s*(\d+)/i, 
-        'Neut': /Neut\s*[:]?\s*(\d+\.?\d*)/i, 'Lymph': /Lymph\s*[:]?\s*(\d+\.?\d*)/i, 
-        'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Hb': /Hb\s*[:]?\s*(\d+)/i, 
+        'WCC': /WCC\s*[:]?\s*(\d+\.?\d*)/i, 
+        'CRP': /CRP\s*[:]?\s*(\d+)/i, 
+        'Cr': /Cr\s*[:]?\s*(\d+)/i, 
+        'K': /K\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Na': /Na\s*[:]?\s*(\d+)/i, 
+        'Mg': /Mg\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Plts': /Plts\s*[:]?\s*(\d+)/i, 
+        'Alb': /Alb\s*[:]?\s*(\d+)/i, 
+        'Neut': /Neut\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Lymph': /Lymph\s*[:]?\s*(\d+\.?\d*)/i, 
+        'PO4': /PO4\s*[:]?\s*(\d+\.?\d*)/i, 
+        'Urea': /Urea\s*[:]?\s*(\d+\.?\d*)/i, 
         'eGFR': /eGFR\s*[:]?\s*(\d+)/i 
     };
     const inputMap = { 'Lac': 'bl_lac_review', 'Hb': 'bl_hb', 'WCC': 'bl_wcc', 'CRP': 'bl_crp', 'Cr': 'bl_cr_review', 'K': 'bl_k', 'Na': 'bl_na', 'Mg': 'bl_mg', 'Plts': 'bl_plts', 'Alb': 'bl_alb', 'Neut': 'bl_neut', 'Lymph': 'bl_lymph', 'PO4': 'bl_phos', 'Urea': 'bl_urea', 'eGFR': 'bl_egfr' };
@@ -258,88 +345,69 @@ function processDmrNote() {
         if(m && m[1]) setScraped(inputMap[label], m[1], true);
     }
 
-    // 4. Devices (Smart Parsing)
+    // --- 5. Devices (Robust List Parsing) ---
     $('devices-container').innerHTML = '';
     
-    // Logic to identify device type
     const parseAndAddDevice = (rawLine) => {
-        if(!rawLine) return;
+        if(!rawLine || rawLine.length < 3) return;
         const lower = rawLine.toLowerCase();
         let type = 'Other Device';
         let details = rawLine;
 
-        // Strict Type Detection
-        if(lower.includes('pivc')) { type = 'PIVC'; details = rawLine.replace(/PIVC/i, '').trim(); }
-        else if(lower.includes('cvl') || lower.includes('cvc')) { type = 'CVC'; details = rawLine.replace(/CV(L|C)/i, '').trim(); }
-        else if(lower.includes('idc')) { type = 'IDC'; details = rawLine.replace(/IDC/i, '').trim(); }
-        else if(lower.includes('picc')) { type = 'PICC Line'; details = rawLine.replace(/PICC( Line)?/i, '').trim(); }
-        else if(lower.includes('drain')) { type = 'Drain'; details = rawLine; }
-        else if(lower.includes('ng') || lower.includes('nj')) { type = 'Enteral Tube'; details = rawLine; }
+        if(lower.includes('pivc')) { type = 'PIVC'; }
+        else if(lower.includes('cvl') || lower.includes('cvc')) { type = 'CVC'; }
+        else if(lower.includes('idc')) { type = 'IDC'; }
+        else if(lower.includes('picc')) { type = 'PICC Line'; }
+        else if(lower.includes('drain') || lower.includes('icc')) { type = 'Drain'; } // Catch ICC
+        else if(lower.includes('ng') || lower.includes('nj')) { type = 'Enteral Tube'; }
 
-        // Cleanup details
-        details = details.replace(/^[x\-:]+\s*/, '').trim();
-        if(!details) details = "Insitu"; 
-
-        createDeviceEntry(type, details, true);
+        // Cleanup
+        details = details.replace(/^[x\-\:\*]+\s*/, '').trim(); 
+        createDeviceEntry(type, details, true); // true = ghost candidate (dashed)
     };
 
-    // A. Parse the main "Devices:" block line-by-line (Most reliable)
-    const deviceSection = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z]|$)/i);
-    if (deviceSection) {
-        const lines = deviceSection[1].split('\n');
+    // Strategy A: "Devices:" block
+    const deviceBlock = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z][a-z]+:|$)/i);
+    if (deviceBlock) {
+        const lines = deviceBlock[1].split('\n');
         lines.forEach(line => {
-             const clean = line.trim().replace(/^-/, '').trim();
+             const clean = line.trim();
              if(clean) parseAndAddDevice(clean);
         });
+    } else {
+        // Strategy B: Fallback (Scanning entire text for keywords if block missing)
+        if(/PIVC/i.test(text)) parseAndAddDevice("PIVC (found in text)");
+        if(/IDC/i.test(text)) parseAndAddDevice("IDC (found in text)");
+        if(/CVL|CVC/i.test(text)) parseAndAddDevice("CVC (found in text)");
+        if(/ICC|Drain/i.test(text)) parseAndAddDevice("Drain (found in text)");
     }
 
-    // B. Fallback: Specific Regex Checks (If block was missing or empty)
-    // We check if devices-container is empty or if we want to catch stray mentions
-    if($('devices-container').children.length === 0) {
-        const pivcMatch = extract(/(PIVC\s*x?\d*.*)/i); 
-        if (pivcMatch) parseAndAddDevice(pivcMatch);
-        if (/CVL|CVC/i.test(text)) parseAndAddDevice("CVC Insitu");
-        if (/IDC/i.test(text)) parseAndAddDevice("IDC Insitu");
-        const drains = extract(/(\d+\s*to\s*\d+\s*ICC drains.*?)(?:Bloods|$|\n)/i);
-        if (drains) parseAndAddDevice("Drain " + drains);
-    }
-
-    // 5. Misc
+    // --- 6. Misc Triggers ---
     if (/Modifications for/i.test(text)) {
         $('chk_use_mods').checked = true;
         $('chk_use_mods').dispatchEvent(new Event('change'));
-    }
-    if (/Morning blood form requested/i.test(text)) {
-        const segGroup = $('seg_new_bloods_ordered');
-        if(segGroup) {
-            const btn = segGroup.querySelector('[data-value="true"]');
-            if(btn) btn.click();
-        }
+        const modsMatch = text.match(/Modifications for (.*?)(?:\.|$)/i);
+        if(modsMatch) $('mods_details').value = modsMatch[1];
     }
     
-    // Open Bloods Accordion
+    // Open Bloods Accordion if we found data
     const bloodsDetails = document.querySelector('details[data-accordion-id="bloods"]');
     if(bloodsDetails) bloodsDetails.setAttribute('open', 'true'); 
 
     $('dmrPasteWrapper').style.display = 'none'; 
-    showToast("Data Scraped");
+    showToast("Data Scraped & Compact Mode Active");
     computeAllAndSave();
+    
+    // Enable Compact Mode
+    enableCompactMode();
 }
 
 /* ===========================
    4. Persistence, State & Logic
    =========================== */
-function showToast(msg, timeout=2500, actionText=null, actionCallback=null) {
+function showToast(msg, timeout=2500) {
   const t = $('toast');
   t.innerHTML = msg;
-  if (actionText && actionCallback) {
-    const btn = document.createElement('button');
-    btn.textContent = actionText;
-    btn.className = 'btn small';
-    btn.style.marginLeft = '12px';
-    btn.addEventListener('click', actionCallback);
-    t.appendChild(btn);
-  }
   t.classList.add('show');
   setTimeout(()=> t.classList.remove('show'), timeout);
 }
@@ -356,24 +424,6 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     return JSON.parse(raw);
-  } catch(e){ return null; }
-}
-
-function pushUndo(snapshot) {
-  try {
-    localStorage.setItem(UNDO_KEY, JSON.stringify({ snapshot, created: Date.now() }));
-  } catch(e){}
-}
-
-function popUndo() {
-  try {
-    const raw = localStorage.getItem(UNDO_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    const age = Date.now() - (obj.created || 0);
-    if (age > 10000) { localStorage.removeItem(UNDO_KEY); return null; }
-    localStorage.removeItem(UNDO_KEY);
-    return obj.snapshot;
   } catch(e){ return null; }
 }
 
@@ -553,35 +603,27 @@ function restoreState(state) {
    5. Initialization & Handlers
    =========================== */
 function clearAllDataSafe() {
-    if (!confirm('Are you sure you want to clear all data for this patient?')) return;
-    pushUndo(getState());
-
-    // 1. Inputs
+    if (!confirm('Are you sure you want to clear all data?')) return;
+    
+    // Reset inputs
     if(typeof staticInputs !== 'undefined') {
         staticInputs.forEach(id => { const el = $(id); if(el) el.value = ''; });
     }
-
-    // 2. Ghosts
     clearGhostValues();
     $('devices-container').innerHTML = '';
-
-    // 3. UI Elements
     document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
     document.querySelectorAll('.seg-btn.active, .select-btn.active, .trend-btn.active, .toggle-label.active').forEach(btn => {
         btn.classList.remove('active');
         if(btn.classList.contains('toggle-label')) btn.dataset.value = 'false';
     });
-
     if($('dmrPasteInput')) $('dmrPasteInput').value = '';
-
-    // 4. Sections
+    
+    // Reset view
+    disableCompactMode();
     $('mods_inputs').style.display = 'none';
     $('infectionMarkers').style.display = 'none';
-    $('dischargeNudge').style.display = 'none';
-    $('override_reason_box').style.display = 'none';
     
     computeAllAndSave();
-    showToast("All data cleared.");
 }
 
 function initialize() {
@@ -591,6 +633,11 @@ function initialize() {
 
   $('processPasteBtn').addEventListener('click', processDmrNote);
   
+  // Expand Button Logic
+  if($('expandFormBtn')) {
+      $('expandFormBtn').addEventListener('click', disableCompactMode);
+  }
+
   updateLastSaved();
   const debouncedComputeAndSave = debounce(()=>{ computeAll(); saveState(true); }, 600);
   
@@ -706,11 +753,6 @@ function initialize() {
           debouncedComputeAndSave();
       });
   });
-
-  $('comorb_other_note').addEventListener('input', () => {
-       $('pmh_note').value = $('comorb_other_note').value;
-       debouncedComputeAndSave();
-  });
   
   document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => {
       updateWardOptions();
@@ -757,11 +799,10 @@ function initialize() {
     });
   });
   
-  // GLOBAL QUICK SELECT LISTENER (Fix for your buttons)
-  // Replaces specific handlers with one global delegation handler
+  // Quick Select Logic (Global)
   document.body.addEventListener('click', (e) => {
       const btn = e.target.closest('.quick-select');
-      if (!btn || btn.id.includes('btn_b')) return; // Ignore bowel buttons (handled separately)
+      if (!btn || btn.id.includes('btn_b') || btn.onclick) return; // Ignore if handled specifically
 
       e.preventDefault();
       e.stopPropagation();
@@ -772,11 +813,7 @@ function initialize() {
 
       if (targetEl) {
           targetEl.value = val;
-          targetEl.dispatchEvent(new Event('input')); // Trigger save/compute
-          
-          // Optional: Add visual click feedback
-          btn.style.opacity = "0.5";
-          setTimeout(() => btn.style.opacity = "1", 100);
+          targetEl.dispatchEvent(new Event('input')); 
       }
   });
 
@@ -811,7 +848,6 @@ function initialize() {
   try {
       if (saved) { restoreState(saved); }
   } catch (err) {
-      console.error("State restore failed:", err);
       localStorage.removeItem(STORAGE_KEY);
   }
   
@@ -842,7 +878,6 @@ function updateLayoutMode(mode) {
     const isFollowUp = (mode === 'followup');
     const pasteWrapper = $('dmrPasteWrapper');
     const riskSections = document.querySelectorAll('details.risk-section');
-    const bloodsAccordion = document.querySelector('details[data-accordion-id="bloods"]');
     const accordionBtn = document.querySelector('.accordion[aria-controls="panel_bloods"]');
     const accordionPanel = $('#panel_bloods');
 
@@ -861,6 +896,7 @@ function updateLayoutMode(mode) {
     } else {
         pasteWrapper.style.display = 'none';
         riskSections.forEach(d => d.setAttribute('open', 'true'));
+        disableCompactMode();
     }
 }
 
@@ -953,25 +989,6 @@ function toggleNeuroFields() {
     }
 }
 
-function getRoundedTime() {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const roundedMinutes = Math.round(minutes / 15) * 15;
-    if (roundedMinutes === 60) {
-        now.setHours(now.getHours() + 1);
-        now.setMinutes(0);
-    } else {
-        now.setMinutes(roundedMinutes);
-    }
-    return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-function formatDateAUS(dateStr) {
-    if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-');
-    return `${d}/${m}/${y}`;
-}
-
 function toggleOxyFields() {
   const mod = $('oxMod').querySelector('.select-btn.active')?.dataset.value || 'RA';
   document.querySelectorAll('.npOnly').forEach(el => el.style.display = (mod === 'NP') ? '' : 'none');
@@ -1034,7 +1051,6 @@ function updateSingleBloodFlag(key, value) {
         } else {
             isAbnormal = value !== null && (value < range.low || value > range.high);
         }
-        
         inputEl.classList.toggle('blood-abnormal', isAbnormal);
         if (rangeEl) {
             if(isAbnormal){
@@ -1378,7 +1394,6 @@ function openRedcapAccelerator() {
     window.open(finalUrl, '_blank');
 }
 
-// Global Init
 document.addEventListener('DOMContentLoaded', ()=> {
   initialize();
 });
