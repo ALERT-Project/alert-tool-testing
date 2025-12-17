@@ -50,7 +50,6 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
     font-weight: 700;
     white-space: nowrap;
 }
-/* Fixed data (Demographics) gets a subtle blue bg when filled by scraper */
 .scraped-fixed {
     background-color: rgba(37, 99, 235, 0.05) !important;
     border-color: var(--blue-hint) !important;
@@ -84,13 +83,10 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .toggle-label.active .state { color: #fff; }
 
 /* --- Accordions --- */
-details.risk-section { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: var(--bg); overflow: hidden; }
-details.risk-section summary { padding: 12px 16px; font-weight: 700; cursor: pointer; background: var(--input-bg); list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; color: var(--ink); }
-details.risk-section summary::-webkit-details-marker { display: none; }
-details.risk-section summary::after { content: '+'; font-weight: 800; color: var(--muted); font-size: 1.2rem; }
-details.risk-section[open] summary { border-bottom: 1px solid var(--line); }
-details.risk-section[open] summary::after { content: '-'; }
-.risk-content { padding: 16px; background: var(--card); }
+.accordion-wrapper { border: 1px solid var(--line); border-radius: 10px; overflow:hidden; margin-bottom: 10px;}
+.accordion { background-color: transparent; color: var(--ink); cursor: pointer; padding: 12px 14px; width: 100%; border: none; border-bottom: 1px solid var(--line); text-align: left; outline: none; font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:space-between; }
+.accordion .icon { color: var(--muted); font-size:0.9rem; margin-left:8px; }
+.panel { padding: 12px; background-color: transparent; display: none; overflow: hidden; }
 
 /* --- Question Rows --- */
 .question-row { display: block; margin-bottom: 18px; position: relative;}
@@ -99,12 +95,9 @@ details.risk-section[open] summary::after { content: '-'; }
 .sub-question-wrapper { margin-left: 14px; padding-left: 12px; border-left: 2px solid var(--line); margin-bottom: 10px; display: none; margin-top:8px;}
 .sub-question-wrapper.show { display: block; animation: fadeIn .2s; }
 
-.prev-risk-text { font-size: 0.85rem; color: var(--blue-hint); font-weight: 600; margin-bottom: 4px; display: none; }
-
 /* --- Grids --- */
 .comorbidity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
 
-/* RESTRUCTURED BLOODS GRID */
 .bloods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
 .blood-item { background: var(--bg); padding: 8px; border-radius: 8px; border: 1px solid var(--line); display:flex; flex-direction:column; gap:4px; position:relative; }
 .blood-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; height: 20px;}
@@ -146,11 +139,6 @@ footer { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--car
 
 hr { border: none; height: 1px; background-color: var(--line); margin: 20px 0 16px 0; }
 .optional-note { text-align:center; color: var(--muted); font-size: 0.85rem; margin: 14px 0; }
-
-.accordion-wrapper { border: 1px solid var(--line); border-radius: 10px; overflow:hidden; margin-bottom: 10px;}
-.accordion { background-color: transparent; color: var(--ink); cursor: pointer; padding: 12px 14px; width: 100%; border: none; border-bottom: 1px solid var(--line); text-align: left; outline: none; font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:space-between; }
-.accordion .icon { color: var(--muted); font-size:0.9rem; margin-left:8px; }
-.panel { padding: 12px; background-color: transparent; display: none; overflow: hidden; }
 
 /* --- Devices --- */
 .device-entry { background: var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; }
