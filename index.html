@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v4.8 (Stable)</title>
+  <title>ALERT Nursing Risk Assessment Tool v5.0</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -20,6 +20,7 @@
 </header>
 
 <main class="container" role="main">
+  
   <div class="card" aria-labelledby="patientHeading">
     <div class="grid">
        <div class="col-6">
@@ -40,8 +41,8 @@
 
       <div class="col-12" id="dmrPasteWrapper" style="display:none;">
           <div class="paste-box">
-            <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Follow-up: Import Previous Note</div>
-            <label style="font-size:0.85rem;">Paste previous ALERT Summary here to auto-fill demographics, vitals, and A-E.</label>
+            <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Import Previous Note</div>
+            <label style="font-size:0.85rem;">Paste previous ALERT Summary here. <br><strong>Fixed data</strong> (Name, Ward, ICU LOS) will fill the boxes.<br><strong>Variable data</strong> (Bloods, Vitals) will appear as blue text <em>above</em> the inputs for reference.</label>
             <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:8px;">
                 <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
@@ -83,7 +84,9 @@
 
   <div class="card">
     <div class="question-row">
-        <div class="question-label">ADDS Score</div>
+        <div style="display:flex; justify-content:space-between;">
+            <div class="question-label">ADDS Score</div>
+            <span id="ghost_adds" class="ghost-val"></span> </div>
         <div class="input-with-trend">
             <input id="adds" type="number" min="0" max="20" />
             <div class="trend-buttons" id="adds_trend"></div>
@@ -94,14 +97,20 @@
         <summary>Circulation & Sepsis</summary>
         <div class="risk-content">
             <div class="question-row">
-                <div class="question-label">Lactate (mmol/L)</div>
+                <div style="display:flex; justify-content:space-between;">
+                    <div class="question-label">Lactate (mmol/L)</div>
+                    <span id="ghost_lactate" class="ghost-val"></span>
+                </div>
                 <input id="lactate" type="number" step="0.1" min="0"/>
             </div>
 
             <div class="question-row">
                 <div class="grid">
                     <div class="col-6">
-                        <div class="question-label">Hb (g/L)</div>
+                        <div style="display:flex; justify-content:space-between;">
+                            <div class="question-label">Hb (g/L)</div>
+                            <span id="ghost_hb" class="ghost-val"></span>
+                        </div>
                         <input id="hb" type="number" step="1" min="0"/>
                     </div>
                     <div class="col-6" style="align-self: end;">
@@ -128,8 +137,14 @@
                 <div id="infectionMarkers" style="margin-top:12px; padding:12px; border-radius:10px; background:var(--bg)">
                     <label style="margin-bottom:8px; display:block; font-weight:600;">Optional: Enter Infection Markers</label>
                     <div class="grid">
-                      <div class="col-4" style="position: relative;"><label for="wcc">WCC</label><input id="wcc" type="number" step="0.1" /><span id="wcc_range" class="range-annotation" style="left:0;"></span></div>
-                      <div class="col-4" style="position: relative;"><label for="crp">CRP</label><input id="crp" type="number" step="1" /><span id="crp_range" class="range-annotation" style="left:0;"></span></div>
+                      <div class="col-4">
+                          <div style="display:flex; justify-content:space-between;"><label for="wcc">WCC</label><span id="ghost_wcc" class="ghost-val"></span></div>
+                          <div style="position:relative"><input id="wcc" type="number" step="0.1" /><span id="wcc_range" class="range-annotation" style="left:0;"></span></div>
+                      </div>
+                      <div class="col-4">
+                          <div style="display:flex; justify-content:space-between;"><label for="crp">CRP</label><span id="ghost_crp" class="ghost-val"></span></div>
+                          <div style="position:relative"><input id="crp" type="number" step="1" /><span id="crp_range" class="range-annotation" style="left:0;"></span></div>
+                      </div>
                       <div class="col-4">
                         <label for="neut">NLR (Neut/Lymph)</label>
                         <div style="position: relative; margin-bottom: 22px;">
@@ -550,21 +565,81 @@
     <button class="accordion" aria-expanded="false" aria-controls="panel_bloods">Bloods <span class="icon" aria-hidden="true">[+]</span></button>
     <div class="panel" id="panel_bloods">
       <div class="bloods-grid">
-        <div class="blood-item"><label for="bl_lac_review">Lac</label><input id="bl_lac_review" type="number" step="0.1"/><div class="trend-buttons" id="bl_lac_review_trend"></div><span id="bl_lac_review_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_hb">Hb</label><input id="bl_hb" type="number"/><div class="trend-buttons" id="bl_hb_trend"></div><span id="bl_hb_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_wcc">WCC</label><input id="bl_wcc" type="number" step="0.1"/><div class="trend-buttons" id="bl_wcc_trend"></div><span id="bl_wcc_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_crp">CRP</label><input id="bl_crp" type="number"/><div class="trend-buttons" id="bl_crp_trend"></div><span id="bl_crp_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_cr_review">Cr</label><input id="bl_cr_review" type="number"/><div class="trend-buttons" id="bl_cr_review_trend"></div><span id="bl_cr_review_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_urea">Urea</label><input id="bl_urea" type="number" step="0.1"/><div class="trend-buttons" id="bl_urea_trend"></div><span id="bl_urea_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_egfr">eGFR</label><input id="bl_egfr" type="number" step="1"/><div class="trend-buttons" id="bl_egfr_trend"></div><span id="bl_egfr_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_k">K</label><input id="bl_k" type="number" step="0.1"/><div class="trend-buttons" id="bl_k_trend"></div><span id="bl_k_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_na">Na</label><input id="bl_na" type="number" step="1"/><div class="trend-buttons" id="bl_na_trend"></div><span id="bl_na_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_mg">Mg</label><input id="bl_mg" type="number" step="0.1"/><div class="trend-buttons" id="bl_mg_trend"></div><span id="bl_mg_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_phos">PO4</label><input id="bl_phos" type="number" step="0.1"/><div class="trend-buttons" id="bl_phos_trend"></div><span id="bl_phos_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_plts">Plts</label><input id="bl_plts" type="number"/><div class="trend-buttons" id="bl_plts_trend"></div><span id="bl_plts_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_alb">Alb</label><input id="bl_alb" type="number"/><div class="trend-buttons" id="bl_alb_trend"></div><span id="bl_alb_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_neut">Neut</label><input id="bl_neut" type="number" step="0.1"/><div class="trend-buttons" id="bl_neut_trend"></div><span id="bl_neut_range" class="range-annotation"></span></div>
-        <div class="blood-item"><label for="bl_lymph">Lymph</label><input id="bl_lymph" type="number" step="0.1"/><div class="trend-buttons" id="bl_lymph_trend"></div><span id="bl_lymph_range" class="range-annotation"></span></div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_lac_review">Lac</label><span id="ghost_bl_lac_review" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_lac_review" type="number" step="0.1"/><div class="trend-buttons" id="bl_lac_review_trend"></div></div>
+            <span id="bl_lac_review_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_hb">Hb</label><span id="ghost_bl_hb" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_hb" type="number"/><div class="trend-buttons" id="bl_hb_trend"></div></div>
+            <span id="bl_hb_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_wcc">WCC</label><span id="ghost_bl_wcc" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_wcc" type="number" step="0.1"/><div class="trend-buttons" id="bl_wcc_trend"></div></div>
+            <span id="bl_wcc_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_crp">CRP</label><span id="ghost_bl_crp" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_crp" type="number"/><div class="trend-buttons" id="bl_crp_trend"></div></div>
+            <span id="bl_crp_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_cr_review">Cr</label><span id="ghost_bl_cr_review" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_cr_review" type="number"/><div class="trend-buttons" id="bl_cr_review_trend"></div></div>
+            <span id="bl_cr_review_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_urea">Urea</label><span id="ghost_bl_urea" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_urea" type="number" step="0.1"/><div class="trend-buttons" id="bl_urea_trend"></div></div>
+            <span id="bl_urea_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_egfr">eGFR</label><span id="ghost_bl_egfr" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_egfr" type="number" step="1"/><div class="trend-buttons" id="bl_egfr_trend"></div></div>
+            <span id="bl_egfr_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_k">K</label><span id="ghost_bl_k" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_k" type="number" step="0.1"/><div class="trend-buttons" id="bl_k_trend"></div></div>
+            <span id="bl_k_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_na">Na</label><span id="ghost_bl_na" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_na" type="number" step="1"/><div class="trend-buttons" id="bl_na_trend"></div></div>
+            <span id="bl_na_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_mg">Mg</label><span id="ghost_bl_mg" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_mg" type="number" step="0.1"/><div class="trend-buttons" id="bl_mg_trend"></div></div>
+            <span id="bl_mg_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_phos">PO4</label><span id="ghost_bl_phos" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_phos" type="number" step="0.1"/><div class="trend-buttons" id="bl_phos_trend"></div></div>
+            <span id="bl_phos_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_plts">Plts</label><span id="ghost_bl_plts" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_plts" type="number"/><div class="trend-buttons" id="bl_plts_trend"></div></div>
+            <span id="bl_plts_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_alb">Alb</label><span id="ghost_bl_alb" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_alb" type="number"/><div class="trend-buttons" id="bl_alb_trend"></div></div>
+            <span id="bl_alb_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_neut">Neut</label><span id="ghost_bl_neut" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_neut" type="number" step="0.1"/><div class="trend-buttons" id="bl_neut_trend"></div></div>
+            <span id="bl_neut_range" class="range-annotation"></span>
+        </div>
+        <div class="blood-item">
+            <div class="blood-header"><label for="bl_lymph">Lymph</label><span id="ghost_bl_lymph" class="ghost-val"></span></div>
+            <div class="blood-input-row"><input id="bl_lymph" type="number" step="0.1"/><div class="trend-buttons" id="bl_lymph_trend"></div></div>
+            <span id="bl_lymph_range" class="range-annotation"></span>
+        </div>
       </div>
       
       <div class="grid" id="infusions_wrapper" style="display:none; margin-top: 12px; row-gap: 8px;">
@@ -631,10 +706,6 @@
             <textarea id="context_other_note" placeholder="Hometeam plan, other notes"></textarea>
         </div>
     </div>
-  </div>
-
-  <div id="expandFormBtn">
-      <span>[ + ] Show All Fields</span>
   </div>
 
   <div class="card">
