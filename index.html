@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v5.6</title>
+  <title>ALERT Nursing Risk Assessment Tool v5.7</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -40,20 +40,25 @@
       </div>
 
       <div class="col-12" id="dmrPasteWrapper">
-          <div class="paste-box">
-            <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Import Previous Note</div>
-            <label style="font-size:0.85rem;">Copy last note from DMR here</label>
-            <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
-            <div style="display:flex; justify-content:space-between; margin-top:8px;">
-                <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
-                <button class="btn small primary" id="processPasteBtn">Process Note</button>
+          <div class="accordion-wrapper" data-accordion-id="import" style="border: 2px dashed var(--accent);">
+            <button class="accordion" aria-expanded="false" aria-controls="panel_import" style="background:var(--input-bg);">
+                📋 Import Previous Note <span class="icon" aria-hidden="true">[+]</span>
+            </button>
+            <div class="panel" id="panel_import">
+                <div class="paste-box-content">
+                    <label style="font-size:0.85rem;">Copy last note from DMR here</label>
+                    <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
+                    <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                        <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
+                        <button class="btn small primary" id="processPasteBtn">Process Note</button>
+                    </div>
+                    
+                    <div id="prevRiskContainer" style="display:none; margin-top:12px; border-top:1px dashed var(--blue-hint); padding-top:8px;">
+                        <div style="color:var(--blue-hint); font-weight:700; font-size:0.9rem; margin-bottom:4px;">⚠️ Previous Risk Factors (For Review)</div>
+                        <div id="prevRiskList" style="font-size:0.9rem; line-height:1.4;"></div>
+                    </div>
+                </div>
             </div>
-            
-            <div id="prevRiskContainer" style="display:none; margin-top:12px; border-top:1px dashed var(--blue-hint); padding-top:8px;">
-                <div style="color:var(--blue-hint); font-weight:700; font-size:0.9rem; margin-bottom:4px;">⚠️ Previous Risk Factors (For Review)</div>
-                <div id="prevRiskList" style="font-size:0.9rem; line-height:1.4;"></div>
-            </div>
-
           </div>
       </div>
 
@@ -113,7 +118,7 @@
         <div class="grid">
             <div class="col-6">
                 <div class="label-row">
-                    <div class="question-label">Hb (g/L)</div>
+                    <div class="question-label">Hb (g/L) <span id="ghost_risk_hb" class="ghost-risk"></span></div>
                     <span id="ghost_hb" class="ghost-val"></span>
                 </div>
                 <input id="hb" type="number" step="1" min="0"/>
@@ -132,7 +137,7 @@
     </div>
 
     <div class="question-row">
-        <div class="question-label">Infection Concern?</div>
+        <div class="question-label">Infection Concern? <span id="ghost_risk_infection" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_infection">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -168,7 +173,7 @@
     </div>
     
     <div class="question-row">
-        <div class="question-label">Vasopressors in last 24h?</div>
+        <div class="question-label">Vasopressors in last 24h? <span id="ghost_risk_pressors" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_pressors">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -186,7 +191,7 @@
     </div>
 
     <div class="question-row">
-      <div class="question-label">Oxygen Modality?</div>
+      <div class="question-label">Oxygen Modality? <span id="ghost_risk_oxy" class="ghost-risk"></span></div>
       <div class="button-group" id="oxMod" role="tablist">
         <button class="select-btn safe" data-value="RA">Room Air</button>
         <button class="select-btn" data-value="NP">Nasal Prongs</button>
@@ -228,7 +233,7 @@
     </div>
 
     <div class="question-row">
-      <div class="question-label">Respiratory Concern?</div>
+      <div class="question-label">Respiratory Concern? <span id="ghost_risk_resp" class="ghost-risk"></span></div>
         <div class="button-group" id="dyspneaConcern">
           <button class="select-btn safe" data-value="none">None</button>
           <button class="select-btn" data-value="mild">Mild</button>
@@ -241,7 +246,7 @@
     </div>
     
     <div class="question-row">
-        <div class="question-label">Historical O2: NP ≥3L, HFNP >30%, or NIV in last 12h?</div>
+        <div class="question-label">Historical O2: NP ≥3L, HFNP >30%, or NIV in last 12h? <span id="ghost_risk_hist_o2" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_hist_o2">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -252,7 +257,7 @@
     </div>
 
     <div class="question-row">
-        <div class="question-label">Intubated in last 24h?</div>
+        <div class="question-label">Intubated in last 24h? <span id="ghost_risk_intubated" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_intubated">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -269,7 +274,7 @@
     </div>
 
     <div class="question-row">
-        <div class="question-label">Rapid oxygen wean in last 12h?</div>
+        <div class="question-label">Rapid oxygen wean in last 12h? <span id="ghost_risk_rapid_wean" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_rapid_wean">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -280,7 +285,7 @@
     </div>
 
     <div class="question-row">
-      <div class="question-label">Neurological Concern?</div>
+      <div class="question-label">Neurological Concern? <span id="ghost_risk_neuro" class="ghost-risk"></span></div>
       <div class="button-group" id="neuroConcern">
         <button class="select-btn safe" data-value="none">None</button>
         <button class="select-btn" data-value="mild">Mild</button>
@@ -298,7 +303,7 @@
     </div>
     
     <div class="question-row">
-        <div class="question-label">Renal Concern? <small>(AKI, rising Cr, or ESRD/dialysis)</small></div>
+        <div class="question-label">Renal Concern? <small>(AKI, rising Cr, or ESRD/dialysis)</small> <span id="ghost_risk_renal" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_renal">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -309,7 +314,7 @@
     </div>
 
     <div class="question-row">
-        <div class="question-label">UOP concerning / downtrending? <small>(&lt;0.5 mL/kg/hr)</small></div>
+        <div class="question-label">UOP concerning / downtrending? <small>(&lt;0.5 mL/kg/hr)</small> <span id="ghost_risk_uop" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_uop">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -320,7 +325,7 @@
     </div>
     
     <div class="question-row">
-      <div class="question-label">Electrolyte Concern?</div>
+      <div class="question-label">Electrolyte Concern? <span id="ghost_risk_electrolytes" class="ghost-risk"></span></div>
       <div class="button-group" id="electrolyteConcern" role="tablist">
         <button class="select-btn safe" data-value="none">None</button>
         <button class="select-btn" data-value="mild">Mild/moderate</button>
@@ -332,7 +337,7 @@
     </div>
     
     <div class="question-row">
-        <div class="question-label">Discharged after-hours?</div>
+        <div class="question-label">Discharged after-hours? <span id="ghost_risk_after_hours" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_after_hours">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
@@ -343,7 +348,7 @@
     </div>
     
     <div class="question-row">
-        <div class="question-label">Immobility >48h?</div>
+        <div class="question-label">Immobility >48h? <span id="ghost_risk_immobility" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_immobility">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
