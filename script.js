@@ -1,12 +1,12 @@
 /* ===========================
-   1. Utilities & Configuration (v5.7)
+   1. Utilities & Configuration (v5.8)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.7';
+const STORAGE_KEY = 'alertNursingToolData_v5.8';
 
 // Ranges
 const normalRanges = {
@@ -212,7 +212,6 @@ function processDmrNote() {
     const setGhostRisk = (id, val) => {
         const el = document.getElementById(id);
         if (el && val) {
-            // Clean matched string to be concise
             let displayVal = val.replace(/^[-*•]\s*/, '').trim();
             el.textContent = `(Prev: ${displayVal})`;
         }
@@ -279,9 +278,10 @@ function processDmrNote() {
         if(btn) btn.click();
     }
 
-    // --- C. Previous Risk Factors (Full Block & Mapping) ---
-    // Capture from header until PLAN, SUMMARY, or double newline end of block
-    const riskBlockMatch = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\n|\nPLAN:|\nSUMMARY:|$)/i);
+    // --- C. Previous Risk Factors (Fixed: Multiline) ---
+    // Captures from Header until the next capitalized section or double newline.
+    // Includes specific lookaheads for PLAN, IMP, SUMMARY, GOC, DEVICES etc.
+    const riskBlockMatch = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\s*(?:PLAN|IMP|SUMMARY|Alert|Patient|[A-Z][A-Za-z\s]+:)|$)/i);
     
     if (riskBlockMatch && riskBlockMatch[1]) {
          const rawLines = riskBlockMatch[1].split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -298,7 +298,7 @@ function processDmrNote() {
                  d.textContent = "• " + displayTxt;
                  container.appendChild(d);
 
-                 // 2. Map to Ghost Risks
+                 // 2. Map to Ghost Risks on specific questions
                  const lower = line.toLowerCase();
                  if (lower.match(/infection|sepsis|wcc|crp|neut/)) setGhostRisk('ghost_risk_infection', displayTxt);
                  else if (lower.match(/renal|creatinine|cr\b/)) setGhostRisk('ghost_risk_renal', displayTxt);
@@ -312,17 +312,23 @@ function processDmrNote() {
                  else if (lower.match(/hb|anemia|bleeding/)) setGhostRisk('ghost_risk_hb', displayTxt);
                  else if (lower.match(/intubat/)) setGhostRisk('ghost_risk_intubated', displayTxt);
                  else if (lower.match(/wean/)) setGhostRisk('ghost_risk_rapid_wean', displayTxt);
-                 // General O2 vs specific history
                  else if (lower.match(/historical/)) setGhostRisk('ghost_risk_hist_o2', displayTxt);
                  else if (lower.match(/oxygen|o2|np|hfnp|niv/)) setGhostRisk('ghost_risk_oxy', displayTxt);
              });
          }
     }
 
-    // --- D. PMH ---
-    // Expanded regex to capture multi-line PMH until next section
-    const pmh = extract(/(?:PMH|Past Medical History)\s*[:]?\s*([\s\S]*?)(?=\n(?:O\/E|A-E|Social|ADDS|Medications|Allocated|IDENTIFIED)|$)/i);
-    if(pmh) setFixed('pmh_note', pmh.trim());
+    // --- D. PMH (Fixed: Formatting) ---
+    // Captures block, then cleans excessive newlines
+    const pmhMatch = text.match(/(?:PMH|Past Medical History)\s*[:]?\s*([\s\S]*?)(?=\n(?:O\/E|A-E|Social|ADDS|Medications|Allocated|IDENTIFIED|ALERT)|$)/i);
+    if(pmhMatch && pmhMatch[1]) {
+        // Clean up lines: split, trim, filter empty, join with single newline
+        const cleanPmh = pmhMatch[1].split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+        setFixed('pmh_note', cleanPmh);
+    }
     
     // --- E. Vitals & A-E ---
     const adds = extract(/ADDS[:\s]+(\d+)/i);
@@ -333,9 +339,9 @@ function processDmrNote() {
     if(extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i)) setGhost('b_rr', extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i), true);
     if(extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i)) setGhost('b_spo2', extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i).replace('%',''), true);
     
-    // Fix: Temp matches "Afebrile" OR digits. 
-    // This looks for "Temp" or "T" followed by space/colon, then matches "Afebrile" or numbers like 36 or 36.5.
-    const temp = extract(/(?:Temp|T)[\s:]+(Afebrile|\d{1,2}\.?\d{0,2})/i);
+    // Fix: Temp matches "Afebrile" OR strictly 2+ digits (e.g. 36). 
+    // Prevents matching "1" from dates.
+    const temp = extract(/(?:Temp|T)[\s:]+(Afebrile|\d{2}\.?\d{0,2})/i);
     if(temp) setGhost('e_temp', temp, true);
 
     const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
@@ -391,10 +397,12 @@ function processDmrNote() {
         }
     }
 
-    // --- G. Devices ---
+    // --- G. Devices (Fixed: Multiline) ---
+    // Captures full block until next header.
     $('devices-container').innerHTML = ''; 
-    const deviceBlockMatch = text.match(/DEVICES:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z\s]+:|$)/i);
-    if (deviceBlockMatch) {
+    const deviceBlockMatch = text.match(/DEVICES:?\s*\n([\s\S]*?)(?=\n\s*(?:GOC|IDENTIFIED|PLAN|IMP|ALERT|[A-Z][A-Z\s]+:)|$)/i);
+    
+    if (deviceBlockMatch && deviceBlockMatch[1]) {
         const lines = deviceBlockMatch[1].split('\n');
         lines.forEach(line => {
             let clean = line.replace(/^[\-\*]\s*/, '').trim(); 
@@ -521,7 +529,7 @@ function restoreState(state) {
 
   if (state['reviewType']) {
     const radioEl = document.querySelector(`input[name="reviewType"][value="${state['reviewType']}"]`);
-    if (radioEl) { radioEl.checked = true; updateWardOptions(); updateLayoutMode(state['reviewType']); }
+    if (radioEl) { radioEl.checked = true; updateWardOptions(); }
   }
   if (state['clinicianRole']) {
     const radioEl = document.querySelector(`input[name="clinicianRole"][value="${state['clinicianRole']}"]`);
@@ -585,7 +593,6 @@ function clearAllDataSafe() {
 
     // Reset to Post-Stepdown default
     document.querySelector('input[name="reviewType"][value="post"]').checked = true;
-    updateLayoutMode('post');
     updateWardOptions();
     
     computeAllAndSave();
@@ -665,7 +672,7 @@ function initialize() {
       });
   });
 
-  document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => { updateWardOptions(); toggleInfusionsBox(); updateLayoutMode(r.value); debouncedComputeAndSave(); }));
+  document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => { updateWardOptions(); toggleInfusionsBox(); debouncedComputeAndSave(); }));
   $('ptWard').addEventListener('change', () => { updateWardOtherVisibility(); debouncedComputeAndSave(); });
   ['neut','lymph'].forEach(id => { $(id).addEventListener('input', ()=>{ updateNLR(); debouncedComputeAndSave(); }); });
 
@@ -719,8 +726,6 @@ function initialize() {
   updateWardOptions();
   if (saved) {
       restoreState(saved);
-  } else {
-      updateLayoutMode('post');
   }
 
   toggleOxyFields(); toggleInfusionsBox(); toggleNeuroFields();
@@ -750,12 +755,6 @@ function handleSegmentClick(id, value, btnClicked) {
         if(value === "true") sub.classList.add('show');
     }
     computeAllAndSave();
-}
-
-function updateLayoutMode(mode) {
-    // Show paste box for both Post and Follow-up
-    const showImport = (mode === 'post' || mode === 'followup');
-    $('dmrPasteWrapper').style.display = showImport ? 'block' : 'none';
 }
 
 function updateWardOptions() {
