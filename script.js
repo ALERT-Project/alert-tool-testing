@@ -1,25 +1,45 @@
 /* ===========================
-   1. Utilities & Configuration (Stable V5.2)
+   1. Utilities & Configuration (v5.4)
    =========================== */
 const $ = id => document.getElementById(id);
-const debounce = (fn, wait=350) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
+const debounce = (fn, wait=300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.2';
-// Accordion key removed as main sections are now flat
+const STORAGE_KEY = 'alertNursingToolData_v5.4';
 
+// Updated Ranges based on request
 const normalRanges = {
-  wcc: { low: 4, high: 11 }, crp: { low: 0, high: 50 },
-  neut: { low: 1.5, high: 7.5 }, lymph: { low: 1.0, high: 4.0 },
-  hb: { low: 115, high: 165 }, plts: { low: 150, high: 400 },
-  k: { low: 3.5, high: 5.2 }, na: { low: 135, high: 145 },
-  cr_review: { low: 50, high: 98 },
-  mg: { low: 0.7, high: 1.1 }, alb: { low: 35, high: 50 },
-  lac_review: { low: 0.5, high: 2.0 },
-  phos: { low: 0.8, high: 1.5 },
-  urea: { low: 2.5, high: 7.8 },
-  egfr: { low: 60, high: 999 }
+  wcc: { low: 4.0, high: 11.0 },
+  hb: { low: 115, high: 165 },
+  plts: { low: 150, high: 400 },
+  k: { low: 3.5, high: 5.2 },
+  na: { low: 135, high: 145 },
+  cr_review: { low: 50, high: 100 }, // Generous upper limit for concern
+  mg: { low: 0.70, high: 1.10 },
+  phos: { low: 0.80, high: 1.50 },
+  alb: { low: 32, high: 50 }, // Adjusted slightly for ICU context
+  lactate: { low: 0.5, high: 2.0 },
+  neut: { low: 1.5, high: 7.5 },
+  lymph: { low: 1.0, high: 4.0 },
+  urea: { low: 2.5, high: 7.5 },
+  egfr: { low: 60, high: 999 },
+  crp: { low: 0, high: 10 } // Added CRP
+};
+
+// Map input IDs to Range Keys
+const rangeMap = {
+    'lactate': 'lactate', 'bl_lac_review': 'lactate',
+    'hb': 'hb', 'bl_hb': 'hb',
+    'wcc': 'wcc', 'bl_wcc': 'wcc',
+    'crp': 'crp', 'bl_crp': 'crp',
+    'neut': 'neut', 'bl_neut': 'neut',
+    'lymph': 'lymph', 'bl_lymph': 'lymph',
+    'bl_cr_review': 'cr_review',
+    'bl_k': 'k', 'bl_na': 'na',
+    'bl_mg': 'mg', 'bl_phos': 'phos',
+    'bl_plts': 'plts', 'bl_alb': 'alb',
+    'bl_urea': 'urea', 'bl_egfr': 'egfr'
 };
 
 const staticInputs = [
@@ -86,7 +106,7 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
         div.querySelector('textarea').addEventListener('input', debounce(() => { computeAll(); saveState(); }, 300));
         div.querySelector('.remove-entry').addEventListener('click', () => { div.remove(); computeAll(); saveState(); });
     } else {
-        // Confirm Device Box (Blue Dashed)
+        // Ghost Device (Confirm Box)
         div.style.border = "2px dashed var(--blue-hint)";
         div.style.padding = "8px";
         div.style.marginBottom = "8px";
@@ -116,19 +136,33 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     }
 }
 
-function getOxyDeviceText(s) {
-    let t = '';
-    switch (s.oxMod) {
-        case 'RA': t = 'RA'; break;
-        case 'NP': t = s.npFlow ? `${s.npFlow}L NP` : 'NP'; break;
-        case 'HFNP': t = `HFNP ${s.hfnpFlow||''}${s.hfnpFlow?'L':''} ${s.hfnpFio2||''}${s.hfnpFio2?'%':''}`; break;
-        case 'NIV': t = `NIV ${s.nivFio2||''}% ${s.nivPeep||''}PEEP ${s.nivPs||''}PS`; break;
+function checkBloodRanges() {
+    for (const [inputId, rangeKey] of Object.entries(rangeMap)) {
+        const input = $(inputId);
+        const rangeSpan = $(inputId + '_range');
+        if (!input || !rangeSpan) continue;
+
+        const range = normalRanges[rangeKey];
+        if (!range) continue;
+
+        // Set range text
+        rangeSpan.textContent = `${range.low} - ${range.high}`;
+
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+            if (val < range.low || val > range.high) {
+                input.classList.add('blood-abnormal');
+            } else {
+                input.classList.remove('blood-abnormal');
+            }
+        } else {
+            input.classList.remove('blood-abnormal');
+        }
     }
-    return t.trim();
 }
 
 /* ===========================
-   3. The DMR Scraper (Fixed vs Ghost)
+   3. The DMR Scraper (Import)
    =========================== */
 function processDmrNote() {
     const text = $('dmrPasteInput').value;
@@ -140,33 +174,55 @@ function processDmrNote() {
     document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
     document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
 
-    // Helper: Fill FIXED data (Input Box)
     const setFixed = (id, val) => {
         const el = $(id);
         if(!el || !val) return;
-        el.value = val;
-        el.classList.add('scraped-fixed'); // Blue bg
+        el.value = val.trim();
+        el.classList.add('scraped-fixed');
         el.dispatchEvent(new Event('input'));
     };
 
-    // Helper: Set GHOST data (Blue Text, Input remains empty)
     const setGhost = (id, val) => {
         const ghostEl = document.getElementById('ghost_' + id);
         if(ghostEl && val) {
-            ghostEl.textContent = `(prev: ${val})`;
+            ghostEl.textContent = `(prev: ${val.trim()})`;
         }
     };
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
-    // --- Fixed Data ---
-    const los = extract(/LOS\s*(\d+)/i);
+    // --- 1. Headers (Patient, URN, Location) ---
+    // Matches: Patient: WW | URN: ...363 | Location: Medihotel 7 719
+    const headerMatch = text.match(/Patient:\s*([^|]+?)\s*\|\s*URN:\s*([^|]+?)\s*\|\s*Location:\s*(.*)/i);
+    if (headerMatch) {
+        setFixed('ptName', headerMatch[1]);
+        const urn = headerMatch[2].replace(/\./g, '').trim(); // Remove dots from ...363
+        setFixed('ptMrn', urn);
+        
+        // Ward Logic
+        const loc = headerMatch[3];
+        setFixed('ptWard', 'Other'); // Default to Other first
+        const wardSelect = $('ptWard');
+        for (let i = 0; i < wardSelect.options.length; i++) {
+            if (loc.includes(wardSelect.options[i].value)) {
+                wardSelect.selectedIndex = i;
+                wardSelect.dispatchEvent(new Event('change'));
+                // Extract bed number if possible (numbers after ward name)
+                const bedMatch = loc.replace(wardSelect.options[i].value, '').match(/(\d+)/);
+                if(bedMatch) setFixed('ptBed', bedMatch[1]);
+                break;
+            }
+        }
+    }
+
+    // --- 2. ICU Data ---
+    const los = extract(/ICU LOS\s*[:]?\s*(\d+)/i);
     if(los) setFixed('icuLos', los);
 
-    const admission = extract(/Admitted post\s*(.*?)(?:\n|$|Not for)/i);
+    const admission = extract(/Reason for ICU Admission\s*[:]?\s*(.*?)(?=\n|$|ALERT)/i);
     if(admission) setFixed('ptAdmissionReason', admission);
 
-    const dateMatch = extract(/Discharged.*?on\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
+    const dateMatch = extract(/(?:Discharged.*?|ICU Discharge Date)\s*[:]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
     if(dateMatch) {
          const parts = dateMatch.split(/[\/\-\.]/);
          if(parts.length === 3) {
@@ -176,9 +232,9 @@ function processDmrNote() {
          }
     }
 
-    const timeMatch = extract(/Seen\s*(\d{4})/i);
+    const timeMatch = extract(/Time of review\s*[:]?\s*(\d{1,2}:\d{2})/i);
     if(timeMatch) {
-        const hour = parseInt(timeMatch.substring(0,2));
+        const hour = parseInt(timeMatch.split(':')[0]);
         let timeVal = 'Morning';
         if(hour >= 12 && hour < 17) timeVal = 'Afternoon';
         else if(hour >= 17 && hour < 21) timeVal = 'Evening';
@@ -187,20 +243,15 @@ function processDmrNote() {
         if(btn) btn.click();
     }
 
-    const gocMatch = text.match(/(Not for CPR.*?(?:METS\.|For METS|for METS)|NFR.*?|For METS.*?)/i);
-    if (gocMatch) setFixed('goc_note', gocMatch[0].trim());
-
-    const pmh = extract(/PMH:\s*([\s\S]*?)(?=\n\n|O\/E:|Social:|ADDS:)/i);
+    // --- 3. PMH & GOC ---
+    const pmh = extract(/PMH\s*[:]?\s*([\s\S]*?)(?=\n\n|O\/E:|A-E ASSESSMENT|Social:|ADDS:)/i);
     if(pmh) setFixed('pmh_note', pmh.trim());
-
-    // --- Variable Data (Ghosts) ---
+    
+    // --- 4. Vitals & A-E ---
     const adds = extract(/ADDS[:\s]+(\d+)/i);
     if(adds) setGhost('adds', adds);
 
-    // Vitals & A-E (Now correctly targeting ghost IDs)
-    const lact = extract(/Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i);
-    if(lact) { setGhost('lactate', lact); setGhost('bl_lac_review', lact); }
-
+    // Vitals
     const hr = extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i);
     if(hr) setGhost('c_hr', hr);
 
@@ -210,12 +261,10 @@ function processDmrNote() {
     const rr = extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i);
     if(rr) setGhost('b_rr', rr);
 
-    const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(\d+%?)/i);
-    if(spo2) {
-        setGhost('b_spo2', spo2.replace('%',''));
-    }
+    const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i);
+    if(spo2) setGhost('b_spo2', spo2.replace('%',''));
 
-    const temp = extract(/(?:Temp|T)\s*[:]?\s*(\d+\.?\d*)/i);
+    const temp = extract(/(?:Temp|T)\s*[:]?\s*(Afebrile|\d+\.?\d*)/i);
     if(temp) setGhost('e_temp', temp);
 
     const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
@@ -227,16 +276,22 @@ function processDmrNote() {
     const pain = extract(/D:\s*(.*?)(?:-|,|$|\n|E:)/i);
     if(pain) setGhost('d_pain', pain);
 
-    const bsl = extract(/BSL\s*[:]?\s*(\d+\.?\d*)/i);
-    if(bsl) setGhost('e_bsl', bsl);
+    // Bowels specific logic: "Bowels: BO (17/12/2025)" or "Bowels: BNO (Last opened...)"
+    const bowelsLine = extract(/Bowels:\s*(.*?)(?=\n|$)/i);
+    if(bowelsLine) {
+        setGhost('ae_bowels', bowelsLine); // Show full line as ghost
+        // Try to parse BO/BNO for button state? 
+        // NOTE: User wants "previous" data for comparison, so ghosting is safer than setting buttons which hides the date
+    }
 
-    const diet = extract(/GIT:\s*(.*?)(?:SKIN|$|\n)/i);
+    const diet = extract(/Diet:\s*(.*?)(?=\n|$)/i);
     if(diet) setGhost('ae_diet', diet);
 
-    const skin = extract(/SKIN:\s*(.*?)(?:Devices|$|\n)/i);
-    if(skin) setGhost('ae_mobility', skin);
+    const msk = extract(/(?:Mobility\/MSK|Mobility):\s*(.*?)(?=\n|$)/i);
+    if(msk) setGhost('ae_mobility', msk);
 
-    // --- Bloods Loop ---
+    // --- 5. Bloods Loop (Handles provided formats) ---
+    // Format: "Bloods: Lac 1.1, Hb 96, WCC 13.14..."
     const bloodMap = {
         'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i,
         'Hb': /Hb\s*[:]?\s*(\d+)/i,
@@ -258,29 +313,42 @@ function processDmrNote() {
             if(label === 'Hb') setGhost('hb', m[1]);
             if(label === 'WCC') setGhost('wcc', m[1]);
             if(label === 'CRP') setGhost('crp', m[1]);
+            if(label === 'Lac') setGhost('lactate', m[1]);
         }
     }
 
-    // --- Devices (Confirm Box) ---
+    // --- 6. Devices (Bullet Points) ---
+    // Example: DEVICES:\n- CVC (R IJ)\n- IDC
     $('devices-container').innerHTML = ''; // Clear existing
-    const parseAndAddDevice = (rawLine) => {
-        if(!rawLine || rawLine.length < 3) return;
-        const lower = rawLine.toLowerCase();
-        let type = 'Other Device';
-        if(lower.includes('pivc')) { type = 'PIVC'; }
-        else if(lower.includes('cvl') || lower.includes('cvc')) { type = 'CVC'; }
-        else if(lower.includes('idc')) { type = 'IDC'; }
-        else if(lower.includes('picc')) { type = 'PICC Line'; }
-        else if(lower.includes('drain') || lower.includes('icc')) { type = 'Drain'; }
-        else if(lower.includes('ng') || lower.includes('nj')) { type = 'Enteral Tube'; }
-        // Add as Ghost Candidate (True)
-        createDeviceEntry(type, rawLine.replace(/^[x\-\:\*]+\s*/, '').trim(), true);
-    };
+    
+    // Find the devices block
+    const deviceBlockMatch = text.match(/DEVICES:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z\s]+:|$)/i);
+    if (deviceBlockMatch) {
+        const lines = deviceBlockMatch[1].split('\n');
+        lines.forEach(line => {
+            let clean = line.replace(/^[\-\*]\s*/, '').trim(); // Remove leading dash/bullet
+            if(!clean) return;
+            
+            // Heuristic detection
+            let type = 'Other Device';
+            let details = clean;
 
-    const deviceBlock = text.match(/Devices:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z][a-z]+:|$)/i);
-    if (deviceBlock) {
-        const lines = deviceBlock[1].split('\n');
-        lines.forEach(line => { const clean = line.trim(); if(clean) parseAndAddDevice(clean); });
+            // Simple keyword matching against known device types
+            const upper = clean.toUpperCase();
+            if(upper.includes('PIVC')) { type = 'PIVC'; details = clean.replace(/PIVC/i, '').trim().replace(/^\(/, '').replace(/\)$/, ''); }
+            else if(upper.includes('CVC') || upper.includes('IJ') || upper.includes('SUBCLAVIAN')) { type = 'CVC'; details = clean.replace(/CVC/i, '').trim(); }
+            else if(upper.includes('IDC')) { type = 'IDC'; details = clean.replace(/IDC/i, '').trim(); }
+            else if(upper.includes('PICC')) { type = 'PICC Line'; details = clean.replace(/PICC/i, '').trim(); }
+            else if(upper.includes('DRAIN') || upper.includes('ICC')) { type = 'Drain'; }
+            else if(upper.includes('NG') || upper.includes('NJ') || upper.includes('PEG')) { type = 'Enteral Tube'; }
+            else if(upper.includes('PACING')) { type = 'Pacing Wire'; }
+            else if(upper.includes('WOUND')) { type = 'Wound'; }
+            
+            // Clean details parenthesis if it was like "CVC (R IJ)" -> R IJ
+            if(details.startsWith('(') && details.endsWith(')')) details = details.slice(1, -1);
+
+            createDeviceEntry(type, details, true); // Create as "Ghost Candidate" (Confirmed via UI)
+        });
     }
 
     if(document.querySelector('details[data-accordion-id="bloods"]')) {
@@ -351,9 +419,7 @@ function getState() {
 
   state.devices = {};
   document.querySelectorAll('.device-entry').forEach(div => {
-      // Don't save unconfirmed ghost devices
-      if(div.querySelector('.confirm-dev')) return;
-
+      if(div.querySelector('.confirm-dev')) return; // Ignore unconfirmed
       const type = div.dataset.type;
       const val = div.querySelector('textarea').value;
       if(!state.devices[type]) state.devices[type] = [];
@@ -438,6 +504,7 @@ function clearAllDataSafe() {
     // Clear Ghosts & Fixed formatting
     document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
     document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
+    document.querySelectorAll('.blood-abnormal').forEach(el => el.classList.remove('blood-abnormal'));
 
     $('devices-container').innerHTML = '';
     document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
@@ -448,6 +515,11 @@ function clearAllDataSafe() {
     if($('dmrPasteInput')) $('dmrPasteInput').value = '';
     $('mods_inputs').style.display = 'none';
     $('infectionMarkers').style.display = 'none';
+
+    // Reset to Follow-up mode so scraper is available
+    document.querySelector('input[name="reviewType"][value="followup"]').checked = true;
+    updateLayoutMode('followup');
+    
     computeAllAndSave();
 }
 
@@ -529,8 +601,10 @@ function initialize() {
   $('ptWard').addEventListener('change', () => { updateWardOtherVisibility(); debouncedComputeAndSave(); });
   ['neut','lymph'].forEach(id => { $(id).addEventListener('input', ()=>{ updateNLR(); debouncedComputeAndSave(); }); });
 
+  // Sync infection card inputs with bloods card inputs
   const sync = (a,b) => { if (!$(a) || !$(b)) return; $(a).addEventListener('input', ()=>{ $(b).value = $(a).value; }); $(b).addEventListener('input', ()=>{ $(a).value = $(b).value; }); };
   sync('adds','atoe_adds'); sync('lactate','bl_lac_review'); sync('hb','bl_hb'); sync('wcc','bl_wcc'); sync('crp','bl_crp');
+  sync('neut','bl_neut'); sync('lymph','bl_lymph'); // Sync neut/lymph
 
   const setOverride = (level) => {
     $('override').value = level;
@@ -552,7 +626,6 @@ function initialize() {
       panel.style.display = open ? 'block' : 'none';
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       btn.querySelector('.icon').textContent = open ? '[-]' : '[+]';
-      // LocalStorage removed for deleted accordions
     });
   });
 
@@ -580,17 +653,8 @@ function initialize() {
 
   toggleOxyFields(); toggleInfusionsBox(); toggleNeuroFields();
   
-  // Re-open helper accordions if saved
-  if(localStorage.getItem(ACCORDION_KEY)) {
-     const maps = JSON.parse(localStorage.getItem(ACCORDION_KEY) || '{}');
-      document.querySelectorAll('.accordion-wrapper').forEach(wrapper => {
-          if (maps[wrapper.dataset.accordionId]) {
-              wrapper.querySelector('.panel').style.display = 'block';
-              wrapper.querySelector('.accordion').setAttribute('aria-expanded','true');
-          }
-      });
-  }
-
+  // Re-open helper accordions if saved (simplified)
+  
   computeAll();
 }
 
@@ -629,7 +693,7 @@ function updateWardOptions() {
     const currentVal = wardSelect.value;
     wardSelect.innerHTML = '<option value="" selected disabled>Select...</option>';
     let options = (type === 'pre') ? ['ICU Pod 1', 'ICU Pod 2', 'ICU Pod 3', 'ICU Pod 4'] :
-        ['3A','3B','3C','3D','4A','4B','4C','4D','5A','5B','5C','5D','6A','6B','6C','6D','7A','7B','7C','7D','SRS2A','SRS1A','SRSA','SRSB','Medihotel 8','Medihotel 7','Medihotel 6','Medihotel 5','Short Stay','Transit Lounge','Mental Health Adult','Mental Health Youth'];
+        ['3A','3B','3C','3D','4A','4B','4C','4D','5A','5B','5C','5D','6A','6B','6C','6D','7A','7B','7C','7D','SRS2A','SRS1A','SRSA','SRSB','Medihotel 8','Medihotel 7','Medihotel 6','Medihotel 5','Short Stay','Transit Lounge','CCU','Mental Health Adult','Mental Health Youth'];
     options.push('Other');
     options.forEach(opt => { const o = document.createElement('option'); o.value = opt; o.textContent = opt; wardSelect.appendChild(o); });
     if (options.includes(currentVal)) wardSelect.value = currentVal;
@@ -671,7 +735,11 @@ function updateNLR() {
     if (nlr > 10) nlrCalc.classList.add('status', 'red');
     else if (nlr >=5) nlrCalc.classList.add('status', 'amber');
     return num(nlr);
-  } else { nlrCalc.textContent = `NLR: --`; return null; }
+  } else { 
+      nlrCalc.textContent = `NLR: --`; 
+      nlrCalc.className = '';
+      return null; 
+  }
 }
 
 function updateWardOtherVisibility() {
@@ -691,7 +759,7 @@ function calculateTimeOnWard(dateStr, timeOfDay) {
 }
 
 /* ===========================
-   6. Compute Logic (Stable Version 4.1 Logic)
+   6. Compute Logic
    =========================== */
 function computeAll() {
   const s = getState();
@@ -702,16 +770,21 @@ function computeAll() {
       const ghost = $('ghost_airway_a')?.textContent;
       if(ghost) airwayEl.value = ghost.replace('(prev: ','').replace(')','');
   }
+  
+  // Run Range Checks
+  checkBloodRanges();
 
   const red = [], amber = [];
   const flaggedElements = { red: [], amber: [] };
+  
+  // Updated Helper: Includes notes in brackets in the risk list
   const addRisk = (list, text, note, elementId, flagType) => {
     if (note && note.trim()) list.push(`${text} (${note.trim()})`);
     else list.push(text);
     if (elementId && flagType) flaggedElements[flagType].push(elementId);
   }
 
-  // Scoring Logic from Stable v4.1
+  // Scoring Logic
   const icuLos = num(s.icuLos);
   const immobility = s.immobility === true;
   const pressorReason = $('pressorReason').querySelector('.active')?.dataset.value;
@@ -860,9 +933,6 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     const trendWord = val => ({ '↑': ' (uptrending)', '↓':' (downtrending)', '→':' (stable)'}[val] || '');
 
     const role = s.clinicianRole || 'ALERT CNS';
-    
-    // UPDATED REVIEW TITLE LOGIC
-    // Both 'post' AND 'followup' use the Post ICU Review format
     const reviewTitle = (s.reviewType === 'pre') 
         ? `${role} pre ICU stepdown review` 
         : `${role} post ICU review`;
@@ -882,15 +952,12 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
 
     headerLines.push(reviewTitle, `Time of review: ${timeStr}`);
 
-    // Use stepdown date as ICU discharge date
     if (s.stepdownDate) {
         const [y, m, d] = s.stepdownDate.split('-');
         headerLines.push(`ICU Discharge Date: ${d}/${m}/${y}`);
     }
 
     const stepdownParts = [];
-    // Only show "Time since stepdown" if we are NOT in pre-mode.
-    // 'post' and 'followup' both show this.
     if (s.reviewType !== 'pre' && wardTimeText) stepdownParts.push(`Time since stepdown: ${wardTimeText}.`);
     if (s.icuLos) stepdownParts.push(`ICU LOS: ${s.icuLos} days.`);
     if (stepdownParts.length) headerLines.push('', ...stepdownParts);
@@ -902,14 +969,13 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
 
     // A-E
     const atoe = [];
-    // MODS line
     if (s.chk_use_mods === true) {
         const modsParts = [];
         if(s.mods_score) modsParts.push(`MODS Score: ${s.mods_score}`);
         if(s.mods_details) modsParts.push(`Details: ${s.mods_details}`);
         if(modsParts.length > 0) atoe.push(modsParts.join(' | '));
     } else if(s.adds) {
-        atoe.push(`ADDS: ${s.adds}`); // fallback if no mods
+        atoe.push(`ADDS: ${s.adds}`);
     }
 
     if (s.airway_a) atoe.push(`A: ${s.airway_a.trim()}`);
@@ -933,7 +999,6 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     ];
     if(c_parts.filter(Boolean).length) atoe.push(`C: ${c_parts.filter(Boolean).join(', ')}`);
 
-    // Alert + Pain
     const d_parts = [];
     if(s.d_alert && s.d_alert.trim()) d_parts.push(s.d_alert.trim());
     if(s.d_pain && s.d_pain.trim()) d_parts.push(`Pain ${s.d_pain.trim()}`);
@@ -950,7 +1015,6 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     if (s.ae_mobility) otherSys.push(`Mobility/MSK: ${s.ae_mobility.trim()}`);
     if (s.ae_diet) otherSys.push(`Diet: ${s.ae_diet.trim()}`);
 
-    // Bowels Logic
     let bowelStr = s.ae_bowels ? s.ae_bowels.trim() : '';
     const dateFunc = (str) => { if(!str) return ''; const [y,m,d] = str.split('-'); return `${d}/${m}/${y}`; };
 
@@ -978,12 +1042,18 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
 
     // Bloods
     const bloodLines = [];
-    const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4' };
-    const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','plts','alb','neut','lymph'];
+    const bloodLabelMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'phos': 'PO4', 'urea': 'Urea', 'egfr': 'eGFR' };
+    const bloodParts = ['lac_review','hb','wcc','crp','cr_review','k','na','mg','phos','plts','alb','neut','lymph','urea','egfr'];
 
     const bloods = bloodParts.map(k => {
-      const v = s[`bl_${k}`]; if (!v) return null;
+      let v = s[`bl_${k}`]; if (!v) return null;
       const trend = s[`bl_${k}_trend`] || '';
+      
+      // Check for ghost/previous value to append
+      const ghostEl = document.getElementById('ghost_bl_' + k);
+      if (ghostEl && ghostEl.textContent && ghostEl.textContent.trim().length > 0) {
+          v += " " + ghostEl.textContent.trim(); // Add "(prev: X)"
+      }
       return `${bloodLabelMap[k]} ${v}${trendWord(trend)}`;
     }).filter(Boolean).join(', ');
 
@@ -998,7 +1068,6 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
         lines.push(`Infusions: ${s.infusions_note.trim()}`);
     }
 
-    // Devices
     if(s.devices) {
         const devLines = [];
         deviceTypes.forEach(type => {
@@ -1016,7 +1085,6 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
         if(devLines.length) lines.push('', 'DEVICES:', ...devLines.map(d=>'- '+d));
     }
 
-    // Context
     const contextLines = [];
     if (s.goc_note) {
       const gocText = s.goc_note.trim();
@@ -1027,11 +1095,9 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     if (s.context_other_note) contextLines.push(`Other: ${s.context_other_note.trim()}`);
     if (contextLines.length) lines.push('', ...contextLines);
 
-    // Risk Factors
     const allFlags = [...red, ...amber];
     if (allFlags.length) lines.push('', 'IDENTIFIED RISK FACTORS:', ...allFlags.map(f=>'- '+f));
 
-    // Plan
     lines.push('', 'PLAN:');
     if (s.chk_discharge_alert === true) {
         lines.push('- Follow-up: Discharge from ALERT nursing post ICU review list.');
