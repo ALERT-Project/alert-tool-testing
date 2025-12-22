@@ -55,6 +55,14 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
     border-color: var(--blue-hint) !important;
 }
 
+/* --- NEW: Previous Risk Item Styling --- */
+.prev-risk-item {
+    color: var(--blue-hint);
+    font-weight: 500;
+    margin-bottom: 4px;
+    display: block;
+}
+
 /* --- Buttons --- */
 .btn, .override-btn, .select-btn, .seg-btn { background-color: var(--bg); color: var(--muted); border: 1px solid var(--line); padding: 6px 10px; border-radius: 8px; cursor:pointer; font-weight: 600; transition: all 0.15s; min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.9rem;}
 .btn.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
