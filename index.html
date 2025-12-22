@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v5.4</title>
+  <title>ALERT Nursing Risk Assessment Tool v5.5</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -42,12 +42,18 @@
       <div class="col-12" id="dmrPasteWrapper">
           <div class="paste-box">
             <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Import Previous Note</div>
-            <label style="font-size:0.85rem;">Paste previous ALERT Summary here to auto-fill details and compare bloods.</label>
+            <label style="font-size:0.85rem;">Paste previous ALERT Summary here to compare risks and bloods.</label>
             <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:8px;">
                 <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
                 <button class="btn small primary" id="processPasteBtn">Process Note</button>
             </div>
+            
+            <div id="prevRiskContainer" style="display:none; margin-top:12px; border-top:1px dashed var(--blue-hint); padding-top:8px;">
+                <div style="color:var(--blue-hint); font-weight:700; font-size:0.9rem; margin-bottom:4px;">⚠️ Previous Risk Factors (For Review)</div>
+                <div id="prevRiskList" style="font-size:0.9rem; line-height:1.4;"></div>
+            </div>
+
           </div>
       </div>
 
