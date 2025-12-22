@@ -1,12 +1,12 @@
 /* ===========================
-   1. Utilities & Configuration (v5.6)
+   1. Utilities & Configuration (v5.7)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.6';
+const STORAGE_KEY = 'alertNursingToolData_v5.7';
 
 // Ranges
 const normalRanges = {
@@ -181,8 +181,9 @@ function processDmrNote() {
 
     $('pasteError').style.display = 'none';
 
-    // Clear previous
+    // 1. Clear previous ghosts and data
     document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
+    document.querySelectorAll('.ghost-risk').forEach(el => el.textContent = '');
     document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
     $('prevRiskList').innerHTML = ''; 
     $('prevRiskContainer').style.display = 'none';
@@ -190,6 +191,7 @@ function processDmrNote() {
     let foundBloods = false;
     let foundAE = false;
 
+    // Helpers
     const setFixed = (id, val) => {
         const el = $(id);
         if(!el || !val) return;
@@ -205,10 +207,20 @@ function processDmrNote() {
             if (isAE) foundAE = true;
         }
     };
+    
+    // Set text on the new ghost-risk spans (e.g. "Prev: Renal Concern")
+    const setGhostRisk = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val) {
+            // Clean matched string to be concise
+            let displayVal = val.replace(/^[-*•]\s*/, '').trim();
+            el.textContent = `(Prev: ${displayVal})`;
+        }
+    };
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
-    // --- 1. Headers ---
+    // --- A. Headers ---
     const headerMatch = text.match(/Patient:\s*([^|]+?)\s*\|\s*URN:\s*([^|]+?)\s*\|\s*Location:\s*(.*?)(\n|$)/i);
     if (headerMatch) {
         setFixed('ptName', headerMatch[1]);
@@ -239,7 +251,7 @@ function processDmrNote() {
         }
     }
 
-    // --- 2. ICU Data ---
+    // --- B. ICU Data ---
     const los = extract(/ICU LOS\s*[:]?\s*(\d+)/i);
     if(los) setFixed('icuLos', los);
 
@@ -267,33 +279,52 @@ function processDmrNote() {
         if(btn) btn.click();
     }
 
-    // --- 3. Previous Risk Factors (Blue List) ---
-    // Capture content between 'IDENTIFIED RISK FACTORS' and the next major section (PLAN, etc)
-    const riskBlock = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\n|\nPLAN:|\nSUMMARY:|$)/i);
-    if (riskBlock && riskBlock[1]) {
-         const lines = riskBlock[1].split('\n').filter(l => l.trim().length > 0);
+    // --- C. Previous Risk Factors (Full Block & Mapping) ---
+    // Capture from header until PLAN, SUMMARY, or double newline end of block
+    const riskBlockMatch = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\n|\nPLAN:|\nSUMMARY:|$)/i);
+    
+    if (riskBlockMatch && riskBlockMatch[1]) {
+         const rawLines = riskBlockMatch[1].split('\n').map(l => l.trim()).filter(l => l.length > 0);
          const container = $('prevRiskList');
-         if (lines.length > 0) {
-             lines.forEach(l => {
-                 let txt = l.trim();
-                 // If it starts with standard bullet, strip it. If not (like "On Midodrine"), keep it.
-                 if (txt.match(/^[-*•]/)) {
-                     txt = txt.replace(/^[-*•]\s*/, '');
-                 }
+         
+         if (rawLines.length > 0) {
+             $('prevRiskContainer').style.display = 'block';
+             
+             rawLines.forEach(line => {
+                 // 1. Add to blue list at top
+                 let displayTxt = line.replace(/^[-*•]\s*/, '');
                  const d = document.createElement('div');
                  d.className = 'prev-risk-item';
-                 d.textContent = "• " + txt;
+                 d.textContent = "• " + displayTxt;
                  container.appendChild(d);
+
+                 // 2. Map to Ghost Risks
+                 const lower = line.toLowerCase();
+                 if (lower.match(/infection|sepsis|wcc|crp|neut/)) setGhostRisk('ghost_risk_infection', displayTxt);
+                 else if (lower.match(/renal|creatinine|cr\b/)) setGhostRisk('ghost_risk_renal', displayTxt);
+                 else if (lower.match(/urine|uop|oliguria/)) setGhostRisk('ghost_risk_uop', displayTxt);
+                 else if (lower.match(/neuro|gcs|delirium|confusion|sedation/)) setGhostRisk('ghost_risk_neuro', displayTxt);
+                 else if (lower.match(/respiratory|wob|rr|tachypnea|airway/)) setGhostRisk('ghost_risk_resp', displayTxt);
+                 else if (lower.match(/vasopressor|norad|metaraminol|bp|hypotension/)) setGhostRisk('ghost_risk_pressors', displayTxt);
+                 else if (lower.match(/electrolyte|potassium|magnesium|sodium/)) setGhostRisk('ghost_risk_electrolytes', displayTxt);
+                 else if (lower.match(/immobility|immobile/)) setGhostRisk('ghost_risk_immobility', displayTxt);
+                 else if (lower.match(/after-hours|discharge/)) setGhostRisk('ghost_risk_after_hours', displayTxt);
+                 else if (lower.match(/hb|anemia|bleeding/)) setGhostRisk('ghost_risk_hb', displayTxt);
+                 else if (lower.match(/intubat/)) setGhostRisk('ghost_risk_intubated', displayTxt);
+                 else if (lower.match(/wean/)) setGhostRisk('ghost_risk_rapid_wean', displayTxt);
+                 // General O2 vs specific history
+                 else if (lower.match(/historical/)) setGhostRisk('ghost_risk_hist_o2', displayTxt);
+                 else if (lower.match(/oxygen|o2|np|hfnp|niv/)) setGhostRisk('ghost_risk_oxy', displayTxt);
              });
-             $('prevRiskContainer').style.display = 'block';
          }
     }
 
-    // --- 4. PMH & GOC ---
-    const pmh = extract(/PMH\s*[:]?\s*([\s\S]*?)(?=\n\n|O\/E:|A-E ASSESSMENT|Social:|ADDS:)/i);
+    // --- D. PMH ---
+    // Expanded regex to capture multi-line PMH until next section
+    const pmh = extract(/(?:PMH|Past Medical History)\s*[:]?\s*([\s\S]*?)(?=\n(?:O\/E|A-E|Social|ADDS|Medications|Allocated|IDENTIFIED)|$)/i);
     if(pmh) setFixed('pmh_note', pmh.trim());
     
-    // --- 5. Vitals & A-E ---
+    // --- E. Vitals & A-E ---
     const adds = extract(/ADDS[:\s]+(\d+)/i);
     if(adds) setGhost('adds', adds);
 
@@ -302,7 +333,9 @@ function processDmrNote() {
     if(extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i)) setGhost('b_rr', extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i), true);
     if(extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i)) setGhost('b_spo2', extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i).replace('%',''), true);
     
-    const temp = extract(/(?:Temp|T)[\s:]+([A-Za-z]+|\d{2}\.?\d*)/i);
+    // Fix: Temp matches "Afebrile" OR digits. 
+    // This looks for "Temp" or "T" followed by space/colon, then matches "Afebrile" or numbers like 36 or 36.5.
+    const temp = extract(/(?:Temp|T)[\s:]+(Afebrile|\d{1,2}\.?\d{0,2})/i);
     if(temp) setGhost('e_temp', temp, true);
 
     const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
@@ -332,7 +365,7 @@ function processDmrNote() {
     const msk = extract(/(?:Mobility\/MSK|Mobility):\s*(.*?)(?=\n|$)/i);
     if(msk) setGhost('ae_mobility', msk, true);
 
-    // --- 6. Bloods Loop ---
+    // --- F. Bloods Loop ---
     const bloodMap = {
         'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i,
         'Hb': /Hb\s*[:]?\s*(\d+)/i,
@@ -358,7 +391,7 @@ function processDmrNote() {
         }
     }
 
-    // --- 7. Devices ---
+    // --- G. Devices ---
     $('devices-container').innerHTML = ''; 
     const deviceBlockMatch = text.match(/DEVICES:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z\s]+:|$)/i);
     if (deviceBlockMatch) {
@@ -383,7 +416,6 @@ function processDmrNote() {
         });
     }
 
-    // Auto-Open Accordions if data found
     if(foundBloods) openAccordion('bloods');
     if(foundAE) openAccordion('ae');
 
@@ -533,6 +565,7 @@ function clearAllDataSafe() {
     if (!confirm('Are you sure you want to clear all data?')) return;
     staticInputs.forEach(id => { const el = $(id); if(el) el.value = ''; });
     document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
+    document.querySelectorAll('.ghost-risk').forEach(el => el.textContent = '');
     document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
     document.querySelectorAll('.blood-abnormal').forEach(el => el.classList.remove('blood-abnormal'));
     
@@ -687,7 +720,6 @@ function initialize() {
   if (saved) {
       restoreState(saved);
   } else {
-      // Default to visible paste box for Post-Stepdown
       updateLayoutMode('post');
   }
 
@@ -721,7 +753,7 @@ function handleSegmentClick(id, value, btnClicked) {
 }
 
 function updateLayoutMode(mode) {
-    // Show paste box for both Post and Follow-up to allow comparison
+    // Show paste box for both Post and Follow-up
     const showImport = (mode === 'post' || mode === 'followup');
     $('dmrPasteWrapper').style.display = showImport ? 'block' : 'none';
 }
