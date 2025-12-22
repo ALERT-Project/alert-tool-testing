@@ -34,8 +34,9 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 
 .concern-note { margin-top: 6px; }
 .concern-note textarea { min-height: 38px; font-size: 0.9rem; }
+.paste-box-content { padding: 12px; }
 
-/* --- Ghost Value Styling (Blue Text) --- */
+/* --- Ghost Value Styling --- */
 .label-row {
     display: flex;
     align-items: baseline;
@@ -50,12 +51,19 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
     font-weight: 700;
     white-space: nowrap;
 }
+.ghost-risk {
+    font-size: 0.75rem;
+    color: var(--blue-hint);
+    font-weight: 500;
+    font-style: italic;
+    margin-left: 6px;
+    display: inline-block;
+}
+
 .scraped-fixed {
     background-color: rgba(37, 99, 235, 0.05) !important;
     border-color: var(--blue-hint) !important;
 }
-
-/* --- NEW: Previous Risk Item Styling --- */
 .prev-risk-item {
     color: var(--blue-hint);
     font-weight: 500;
@@ -95,6 +103,8 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .accordion { background-color: transparent; color: var(--ink); cursor: pointer; padding: 12px 14px; width: 100%; border: none; border-bottom: 1px solid var(--line); text-align: left; outline: none; font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:space-between; }
 .accordion .icon { color: var(--muted); font-size:0.9rem; margin-left:8px; }
 .panel { padding: 12px; background-color: transparent; display: none; overflow: hidden; }
+/* Override panel padding for import box if needed */
+#panel_import { padding: 0; background: var(--input-bg); }
 
 /* --- Question Rows --- */
 .question-row { display: block; margin-bottom: 18px; position: relative;}
@@ -119,9 +129,6 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 /* Updated Blood Logic */
 .blood-abnormal { border-color: var(--red) !important; background-color: rgba(239,68,68,.06) !important; }
 .range-annotation { font-size: 0.65rem; color: var(--muted); position: absolute; bottom: 2px; left: 0; width:100%; text-align:center; display: block; white-space:nowrap; pointer-events:none;}
-
-/* --- Paste Box --- */
-.paste-box { background: var(--input-bg); border: 2px dashed var(--accent); padding: 12px; border-radius: 10px; margin-top: 4px; }
 
 /* --- KPI & Footer --- */
 .kpi{display:grid; grid-template-columns: 1.5fr 1fr 1fr; gap:10px;}
