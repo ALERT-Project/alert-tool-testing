@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v5.2</title>
+  <title>ALERT Nursing Risk Assessment Tool v5.4</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -34,15 +34,15 @@
         <label>Review Type</label>
         <div style="display:flex; gap:8px; padding-top:6px;">
           <label style="font-weight:500"><input type="radio" name="reviewType" value="pre"> Pre-Stepdown</label>
-          <label style="font-weight:500"><input type="radio" name="reviewType" value="post" checked> Post-Stepdown</label>
-          <label style="font-weight:500; color:var(--accent);"><input type="radio" name="reviewType" value="followup"> Follow-up</label>
+          <label style="font-weight:500"><input type="radio" name="reviewType" value="post"> Post-Stepdown</label>
+          <label style="font-weight:500; color:var(--accent);"><input type="radio" name="reviewType" value="followup" checked> Follow-up</label>
         </div>
       </div>
 
-      <div class="col-12" id="dmrPasteWrapper" style="display:none;">
+      <div class="col-12" id="dmrPasteWrapper">
           <div class="paste-box">
             <div class="section-title" style="color:var(--accent); margin-bottom:4px;">📋 Import Previous Note</div>
-            <label style="font-size:0.85rem;">Paste previous ALERT Summary here. <br><strong>Fixed data</strong> (Name, Ward, ICU LOS) will fill the boxes.<br><strong>Variable data</strong> (Bloods, Vitals, A-E) will appear as blue <strong>(prev: value)</strong> text next to labels.</label>
+            <label style="font-size:0.85rem;">Paste previous ALERT Summary here to auto-fill details and compare bloods.</label>
             <textarea id="dmrPasteInput" placeholder="Paste text here..." style="min-height:80px; font-family:monospace; font-size:0.85rem;"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:8px;">
                 <span id="pasteError" style="color:var(--red); font-size:0.85rem; display:none; font-weight:600; align-self:center;">Invalid Format</span>
@@ -100,6 +100,7 @@
             <span id="ghost_lactate" class="ghost-val"></span>
         </div>
         <input id="lactate" type="number" step="0.1" min="0"/>
+        <span id="lactate_range" class="range-annotation" style="position:relative; bottom:0; display:block; margin-top:2px;"></span>
     </div>
 
     <div class="question-row">
@@ -110,6 +111,7 @@
                     <span id="ghost_hb" class="ghost-val"></span>
                 </div>
                 <input id="hb" type="number" step="1" min="0"/>
+                <span id="hb_range" class="range-annotation" style="position:relative; bottom:0; display:block; margin-top:2px;"></span>
             </div>
             <div class="col-6" style="align-self: end;">
                 <div class="segmented-group" id="seg_hb_dropping" style="height: 44px;">
@@ -147,9 +149,11 @@
                 <label for="neut">NLR (Neut/Lymph)</label>
                 <div style="position: relative; margin-bottom: 22px;">
                     <input id="neut" type="number" step="0.1" placeholder="Neut" />
+                    <span id="neut_range" class="range-annotation" style="left:0;"></span>
                 </div>
                 <div style="position: relative; margin-bottom: 22px;">
                     <input id="lymph" type="number" step="0.1" placeholder="Lymph" />
+                    <span id="lymph_range" class="range-annotation" style="left:0;"></span>
                 </div>
                 <div id="nlrCalc" style="margin-top:6px; font-size:0.9rem; color:var(--muted)">NLR: --</div>
               </div>
