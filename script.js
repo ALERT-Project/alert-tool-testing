@@ -1,14 +1,14 @@
 /* ===========================
-   1. Utilities & Configuration (v5.5)
+   1. Utilities & Configuration (v5.6)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.5';
+const STORAGE_KEY = 'alertNursingToolData_v5.6';
 
-// Updated Ranges
+// Ranges
 const normalRanges = {
   wcc: { low: 4.0, high: 11.0 },
   hb: { low: 115, high: 165 },
@@ -88,6 +88,19 @@ function stackText(id, text) {
     el.dispatchEvent(new Event('input'));
 }
 
+function openAccordion(id) {
+    const wrapper = document.querySelector(`.accordion-wrapper[data-accordion-id="${id}"]`);
+    if(wrapper) {
+        const panel = wrapper.querySelector('.panel');
+        const btn = wrapper.querySelector('.accordion');
+        if (panel.style.display !== 'block') {
+            panel.style.display = 'block';
+            btn.setAttribute('aria-expanded', 'true');
+            btn.querySelector('.icon').textContent = '[-]';
+        }
+    }
+}
+
 function createDeviceEntry(type, value = '', isGhostCandidate = false) {
     const container = $('devices-container');
     const div = document.createElement('div');
@@ -144,8 +157,6 @@ function checkBloodRanges() {
 
         const range = normalRanges[rangeKey];
         if (!range) continue;
-
-        // Set range text
         rangeSpan.textContent = `${range.low} - ${range.high}`;
 
         const val = parseFloat(input.value);
@@ -170,11 +181,14 @@ function processDmrNote() {
 
     $('pasteError').style.display = 'none';
 
-    // Clear previous ghosts and inputs
+    // Clear previous
     document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
     document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
     $('prevRiskList').innerHTML = ''; 
     $('prevRiskContainer').style.display = 'none';
+
+    let foundBloods = false;
+    let foundAE = false;
 
     const setFixed = (id, val) => {
         const el = $(id);
@@ -184,51 +198,42 @@ function processDmrNote() {
         el.dispatchEvent(new Event('input'));
     };
 
-    const setGhost = (id, val) => {
+    const setGhost = (id, val, isAE = false) => {
         const ghostEl = document.getElementById('ghost_' + id);
         if(ghostEl && val) {
-            ghostEl.textContent = `(${val.trim()})`; // Format: (135)
+            ghostEl.textContent = `(${val.trim()})`; 
+            if (isAE) foundAE = true;
         }
     };
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
-    // --- 1. Headers (Patient, URN, Location) ---
-    // Expanded regex to handle varied spacing or pipe formats
+    // --- 1. Headers ---
     const headerMatch = text.match(/Patient:\s*([^|]+?)\s*\|\s*URN:\s*([^|]+?)\s*\|\s*Location:\s*(.*?)(\n|$)/i);
     if (headerMatch) {
         setFixed('ptName', headerMatch[1]);
-        const urn = headerMatch[2].replace(/\./g, '').trim(); 
-        setFixed('ptMrn', urn);
+        setFixed('ptMrn', headerMatch[2].replace(/\./g, '').trim());
         
-        // Ward/Bed Logic
         const locString = headerMatch[3].trim();
         const wardSelect = $('ptWard');
         let foundWard = false;
 
-        // Try to match dropdown options
         for (let i = 0; i < wardSelect.options.length; i++) {
             const optVal = wardSelect.options[i].value;
             if (optVal && locString.includes(optVal)) {
                 wardSelect.selectedIndex = i;
                 wardSelect.dispatchEvent(new Event('change'));
                 foundWard = true;
-                
-                // Extract bed: Remove ward name, find remaining digits
                 const bedPart = locString.replace(optVal, '').trim();
-                const bedMatch = bedPart.match(/(\d+)$/); // Grab numbers at the end
+                const bedMatch = bedPart.match(/(\d+)$/);
                 if(bedMatch) setFixed('ptBed', bedMatch[1]);
                 break;
             }
         }
-
-        // Fallback: If Ward not found in dropdown, set to Other and dump string
         if (!foundWard) {
             wardSelect.value = "Other";
             wardSelect.dispatchEvent(new Event('change'));
             setFixed('ptWardOther', locString);
-            
-            // Try to guess bed anyway (last number in string)
             const bedMatchFallback = locString.match(/(\d+)$/);
             if(bedMatchFallback) setFixed('ptBed', bedMatchFallback[1]);
         }
@@ -262,17 +267,22 @@ function processDmrNote() {
         if(btn) btn.click();
     }
 
-    // --- 3. Extracted Previous Risk Factors (Blue List) ---
-    const riskBlock = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\n|\nPLAN:|$)/i);
+    // --- 3. Previous Risk Factors (Blue List) ---
+    // Capture content between 'IDENTIFIED RISK FACTORS' and the next major section (PLAN, etc)
+    const riskBlock = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\n|\nPLAN:|\nSUMMARY:|$)/i);
     if (riskBlock && riskBlock[1]) {
-         // Split by newline, cleanup bullets
-         const lines = riskBlock[1].split('\n').map(l => l.trim().replace(/^[-*•]\s*/, '')).filter(l => l);
+         const lines = riskBlock[1].split('\n').filter(l => l.trim().length > 0);
          const container = $('prevRiskList');
          if (lines.length > 0) {
              lines.forEach(l => {
+                 let txt = l.trim();
+                 // If it starts with standard bullet, strip it. If not (like "On Midodrine"), keep it.
+                 if (txt.match(/^[-*•]/)) {
+                     txt = txt.replace(/^[-*•]\s*/, '');
+                 }
                  const d = document.createElement('div');
                  d.className = 'prev-risk-item';
-                 d.textContent = "• " + l;
+                 d.textContent = "• " + txt;
                  container.appendChild(d);
              });
              $('prevRiskContainer').style.display = 'block';
@@ -287,58 +297,42 @@ function processDmrNote() {
     const adds = extract(/ADDS[:\s]+(\d+)/i);
     if(adds) setGhost('adds', adds);
 
-    // Vitals
-    const hr = extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i);
-    if(hr) setGhost('c_hr', hr);
-
-    const bp = extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i);
-    if(bp) setGhost('c_nibp', bp);
-
-    const rr = extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i);
-    if(rr) setGhost('b_rr', rr);
-
-    const spo2 = extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i);
-    if(spo2) setGhost('b_spo2', spo2.replace('%',''));
-
-    // Temp Fix: Match "Afebrile" OR digits (e.g. 36.5). Avoid matching "1" if text is "T: 1...".
+    if(extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i)) setGhost('c_hr', extract(/(?:HR|Pulse)\s*[:]?\s*(\d+)/i), true);
+    if(extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i)) setGhost('c_nibp', extract(/(?:BP|NIBP)\s*[:]?\s*(\d{2,3}\/\d{2,3})/i), true);
+    if(extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i)) setGhost('b_rr', extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i), true);
+    if(extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i)) setGhost('b_spo2', extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i).replace('%',''), true);
+    
     const temp = extract(/(?:Temp|T)[\s:]+([A-Za-z]+|\d{2}\.?\d*)/i);
-    if(temp) setGhost('e_temp', temp);
+    if(temp) setGhost('e_temp', temp, true);
 
     const airway = extract(/A:\s*(.*?)(?:,|$|\n|B:)/i);
-    if(airway) setGhost('airway_a', airway);
+    if(airway) setGhost('airway_a', airway, true);
 
     const wob = extract(/(?:WOB|Work of breathing)[\s\S]{0,20}?(nil increased|increased|moderate|severe|normal)/i);
-    if(wob) setGhost('b_wob', wob);
+    if(wob) setGhost('b_wob', wob, true);
 
-    // D-Section: Separate Alert/GCS from Pain
-    // Grab the whole D line first
     const dLine = extract(/D:\s*(.*?)(?=\n|E:|$)/i);
     if (dLine) {
-        // Look for Alert/GCS keywords
         const alertMatch = dLine.match(/(Alert|GCS\s*\d+|AMT\s*\d+\/\d+|Confusion|Delirium)/i);
-        if (alertMatch) setGhost('d_alert', alertMatch[0]);
-
-        // Look for Pain specifically
+        if (alertMatch) setGhost('d_alert', alertMatch[0], true);
         const painMatch = dLine.match(/Pain\s*([^,]+)/i);
-        if (painMatch) setGhost('d_pain', painMatch[1].trim());
+        if (painMatch) setGhost('d_pain', painMatch[1].trim(), true);
         else if (dLine.includes('Pain')) {
-            // Fallback if formatting is weird, try to grab text after "Pain"
              const pParts = dLine.split(/Pain/i);
-             if (pParts[1]) setGhost('d_pain', pParts[1].split(',')[0].trim());
+             if (pParts[1]) setGhost('d_pain', pParts[1].split(',')[0].trim(), true);
         }
     }
 
-    // Bowels
     const bowelsLine = extract(/Bowels:\s*(.*?)(?=\n|$)/i);
-    if(bowelsLine) setGhost('ae_bowels', bowelsLine); 
+    if(bowelsLine) setGhost('ae_bowels', bowelsLine, true); 
 
     const diet = extract(/Diet:\s*(.*?)(?=\n|$)/i);
-    if(diet) setGhost('ae_diet', diet);
+    if(diet) setGhost('ae_diet', diet, true);
 
     const msk = extract(/(?:Mobility\/MSK|Mobility):\s*(.*?)(?=\n|$)/i);
-    if(msk) setGhost('ae_mobility', msk);
+    if(msk) setGhost('ae_mobility', msk, true);
 
-    // --- 6. Bloods Loop (Handles provided formats) ---
+    // --- 6. Bloods Loop ---
     const bloodMap = {
         'Lac': /Lac(?:t)?(?:ate)?\s*[:]?\s*(\d+\.?\d*)/i,
         'Hb': /Hb\s*[:]?\s*(\d+)/i,
@@ -356,7 +350,7 @@ function processDmrNote() {
         const m = text.match(regex);
         if(m && m[1]) {
             setGhost(inputMap[label], m[1]);
-            // Special cases for main page risk card
+            foundBloods = true;
             if(label === 'Hb') setGhost('hb', m[1]);
             if(label === 'WCC') setGhost('wcc', m[1]);
             if(label === 'CRP') setGhost('crp', m[1]);
@@ -364,19 +358,16 @@ function processDmrNote() {
         }
     }
 
-    // --- 7. Devices (Bullet Points) ---
-    $('devices-container').innerHTML = ''; // Clear existing
-    
+    // --- 7. Devices ---
+    $('devices-container').innerHTML = ''; 
     const deviceBlockMatch = text.match(/DEVICES:\s*\n([\s\S]*?)(?=\n\n|\n[A-Z\s]+:|$)/i);
     if (deviceBlockMatch) {
         const lines = deviceBlockMatch[1].split('\n');
         lines.forEach(line => {
             let clean = line.replace(/^[\-\*]\s*/, '').trim(); 
             if(!clean) return;
-            
             let type = 'Other Device';
             let details = clean;
-
             const upper = clean.toUpperCase();
             if(upper.includes('PIVC')) { type = 'PIVC'; details = clean.replace(/PIVC/i, '').trim().replace(/^\(/, '').replace(/\)$/, ''); }
             else if(upper.includes('CVC') || upper.includes('IJ') || upper.includes('SUBCLAVIAN')) { type = 'CVC'; details = clean.replace(/CVC/i, '').trim(); }
@@ -388,16 +379,14 @@ function processDmrNote() {
             else if(upper.includes('WOUND')) { type = 'Wound'; }
             
             if(details.startsWith('(') && details.endsWith(')')) details = details.slice(1, -1);
-
             createDeviceEntry(type, details, true); 
         });
     }
 
-    if(document.querySelector('details[data-accordion-id="bloods"]')) {
-        document.querySelector('details[data-accordion-id="bloods"]').setAttribute('open', 'true');
-    }
+    // Auto-Open Accordions if data found
+    if(foundBloods) openAccordion('bloods');
+    if(foundAE) openAccordion('ae');
 
-    $('dmrPasteWrapper').style.display = 'none';
     showToast("Data Imported");
     computeAllAndSave();
 }
@@ -543,7 +532,6 @@ function restoreState(state) {
 function clearAllDataSafe() {
     if (!confirm('Are you sure you want to clear all data?')) return;
     staticInputs.forEach(id => { const el = $(id); if(el) el.value = ''; });
-    // Clear Ghosts & Fixed formatting
     document.querySelectorAll('.ghost-val').forEach(el => el.textContent = '');
     document.querySelectorAll('.scraped-fixed').forEach(el => el.classList.remove('scraped-fixed'));
     document.querySelectorAll('.blood-abnormal').forEach(el => el.classList.remove('blood-abnormal'));
@@ -562,9 +550,10 @@ function clearAllDataSafe() {
     $('mods_inputs').style.display = 'none';
     $('infectionMarkers').style.display = 'none';
 
-    // Reset to Follow-up mode so scraper is available
-    document.querySelector('input[name="reviewType"][value="followup"]').checked = true;
-    updateLayoutMode('followup');
+    // Reset to Post-Stepdown default
+    document.querySelector('input[name="reviewType"][value="post"]').checked = true;
+    updateLayoutMode('post');
+    updateWardOptions();
     
     computeAllAndSave();
 }
@@ -650,7 +639,7 @@ function initialize() {
   // Sync infection card inputs with bloods card inputs
   const sync = (a,b) => { if (!$(a) || !$(b)) return; $(a).addEventListener('input', ()=>{ $(b).value = $(a).value; }); $(b).addEventListener('input', ()=>{ $(a).value = $(b).value; }); };
   sync('adds','atoe_adds'); sync('lactate','bl_lac_review'); sync('hb','bl_hb'); sync('wcc','bl_wcc'); sync('crp','bl_crp');
-  sync('neut','bl_neut'); sync('lymph','bl_lymph'); // Sync neut/lymph
+  sync('neut','bl_neut'); sync('lymph','bl_lymph'); 
 
   const setOverride = (level) => {
     $('override').value = level;
@@ -695,7 +684,12 @@ function initialize() {
 
   const saved = loadState();
   updateWardOptions();
-  if (saved) restoreState(saved);
+  if (saved) {
+      restoreState(saved);
+  } else {
+      // Default to visible paste box for Post-Stepdown
+      updateLayoutMode('post');
+  }
 
   toggleOxyFields(); toggleInfusionsBox(); toggleNeuroFields();
   
@@ -727,8 +721,9 @@ function handleSegmentClick(id, value, btnClicked) {
 }
 
 function updateLayoutMode(mode) {
-    const isFollowUp = (mode === 'followup');
-    $('dmrPasteWrapper').style.display = isFollowUp ? 'block' : 'none';
+    // Show paste box for both Post and Follow-up to allow comparison
+    const showImport = (mode === 'post' || mode === 'followup');
+    $('dmrPasteWrapper').style.display = showImport ? 'block' : 'none';
 }
 
 function updateWardOptions() {
@@ -821,7 +816,6 @@ function computeAll() {
   const red = [], amber = [];
   const flaggedElements = { red: [], amber: [] };
   
-  // Updated Helper: Includes notes in brackets in the risk list
   const addRisk = (list, text, note, elementId, flagType) => {
     if (note && note.trim()) list.push(`${text} (${note.trim()})`);
     else list.push(text);
@@ -1093,10 +1087,9 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
       let v = s[`bl_${k}`]; if (!v) return null;
       const trend = s[`bl_${k}_trend`] || '';
       
-      // Check for ghost/previous value to append
       const ghostEl = document.getElementById('ghost_bl_' + k);
       if (ghostEl && ghostEl.textContent && ghostEl.textContent.trim().length > 0) {
-          v += " " + ghostEl.textContent.trim(); // Add "(135)"
+          v += " " + ghostEl.textContent.trim(); 
       }
       return `${bloodLabelMap[k]} ${v}${trendWord(trend)}`;
     }).filter(Boolean).join(', ');
