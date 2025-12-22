@@ -99,7 +99,7 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .comorbidity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
 
 .bloods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
-.blood-item { background: var(--bg); padding: 8px; border-radius: 8px; border: 1px solid var(--line); display:flex; flex-direction:column; gap:4px; position:relative; }
+.blood-item { background: var(--bg); padding: 8px; border-radius: 8px; border: 1px solid var(--line); display:flex; flex-direction:column; gap:4px; position:relative; padding-bottom:18px;}
 .blood-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; height: 20px;}
 .blood-header label { margin: 0; font-size: 0.8rem; }
 .blood-input-row { display: flex; gap: 4px; }
@@ -108,8 +108,9 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .trend-btn { font-size: 0.7rem; border: 1px solid var(--line); background: var(--card); border-radius: 4px; width: 24px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); padding:0; line-height:1;}
 .trend-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
+/* Updated Blood Logic */
 .blood-abnormal { border-color: var(--red) !important; background-color: rgba(239,68,68,.06) !important; }
-.range-annotation { font-size: 0.65rem; color: var(--muted); position: absolute; bottom: -16px; left: 0; width:100%; text-align:center; display: none; white-space:nowrap; }
+.range-annotation { font-size: 0.65rem; color: var(--muted); position: absolute; bottom: 2px; left: 0; width:100%; text-align:center; display: block; white-space:nowrap; pointer-events:none;}
 
 /* --- Paste Box --- */
 .paste-box { background: var(--input-bg); border: 2px dashed var(--accent); padding: 12px; border-radius: 10px; margin-top: 4px; }
