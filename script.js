@@ -203,7 +203,7 @@ function processDmrNote() {
     const setGhost = (id, val, isAE = false) => {
         const ghostEl = document.getElementById('ghost_' + id);
         if(ghostEl && val) {
-            ghostEl.textContent = `(${val.trim()})`; 
+            ghostEl.textContent = `(Prev: ${val.trim()})`; 
             if (isAE) foundAE = true;
         }
     };
@@ -838,7 +838,7 @@ function computeAll() {
   const airwayEl = $('airway_a');
   if (airwayEl.dataset.manual !== "true" && airwayEl.value === "") {
       const ghost = $('ghost_airway_a')?.textContent;
-      if(ghost) airwayEl.value = ghost.replace('(','').replace(')','');
+      if(ghost) airwayEl.value = ghost.replace('(','').replace(')','').replace('Prev: ', '').trim();
   }
   
   // Run Range Checks
@@ -1120,7 +1120,7 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
       
       const ghostEl = document.getElementById('ghost_bl_' + k);
       if (ghostEl && ghostEl.textContent && ghostEl.textContent.trim().length > 0) {
-          v += " " + ghostEl.textContent.trim(); 
+          v += " " + ghostEl.textContent.trim().replace('Prev: ', ''); // Remove prev from summary if present
       }
       return `${bloodLabelMap[k]} ${v}${trendWord(trend)}`;
     }).filter(Boolean).join(', ');
