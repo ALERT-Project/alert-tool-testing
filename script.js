@@ -151,6 +151,9 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
 
 function checkBloodRanges() {
     for (const [inputId, rangeKey] of Object.entries(rangeMap)) {
+        // EXCEPTION: Skip top scorable inputs so they don't get the small border/text
+        if (inputId === 'lactate' || inputId === 'hb') continue;
+        
         const input = $(inputId);
         const rangeSpan = $(inputId + '_range');
         if (!input || !rangeSpan) continue;
@@ -905,10 +908,10 @@ function computeAll() {
 
   if (s.rapid_wean === true) addRisk(red, 'Rapid oxygen wean in last 12h', s.rapid_wean_note, 'seg_rapid_wean', 'red');
   if (s.after_hours === true) addRisk(amber, 'Discharged after-hours', s.after_hours_note, 'seg_after_hours', 'amber');
+
   if (pressorsRed && !hasCombinedRedFlag) addRisk(red, 'Vasopressors required (Shock/Complicated)', s.pressors_note, 'seg_pressors', 'red');
   else if (pressorsAmber) addRisk(amber, 'Vasopressors (Routine/Short term)', s.pressors_note, 'seg_pressors', 'amber');
 
-  if (num(s.adds) >= 3) { red.push(`ADDS ${s.adds}`); flaggedElements.red.push('adds');}
   if (lactateVal > 2.5) { red.push(`Lactate ${lactateVal}`); flaggedElements.red.push('lactate');}
   else if (lactateVal >= 2.0 && !hasCombinedRedFlag) { amber.push(`Lactate ${lactateVal}`); flaggedElements.amber.push('lactate');}
 
@@ -937,6 +940,33 @@ function computeAll() {
 
   if (s.infection === true) {
      let cat = 'red'; addRisk(red, 'Infection Concern', s.infection_note, 'seg_infection', cat);
+  }
+
+  // --- ADDS Logic (Modified) ---
+  const addsVal = num(s.adds);
+  if (addsVal !== null) {
+      if (addsVal >= 4) {
+          red.push(`ADDS ${addsVal}`); 
+          flaggedElements.red.push('adds');
+      } 
+      else if (addsVal === 3) {
+          // Check time constraint (Only relevant for first 24h)
+          const wardTimeObj = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
+          const hours = wardTimeObj.hours !== null ? wardTimeObj.hours : 0; // Default to 0 (fresh) if date missing to be safe
+          
+          if (hours <= 24) {
+               if (red.length > 0 || amber.length > 0) {
+                   // Context Rule: Red if other flags exist
+                   red.push(`ADDS 3 + Other Factors (First 24h)`);
+                   flaggedElements.red.push('adds');
+               } else {
+                   // Clean Sheet Rule: Amber if no other flags
+                   amber.push(`ADDS 3 (First 24h)`);
+                   flaggedElements.amber.push('adds');
+               }
+          }
+          // If > 24h, ADDS 3 is ignored (Green)
+      }
   }
 
   const overrideNote = $('overrideNote')?.value ? ` (${$('overrideNote').value})` : '';
