@@ -1,12 +1,12 @@
 /* ===========================
-   1. Utilities & Configuration (v5.8)
+   1. Utilities & Configuration (v6.0)
    =========================== */
 const $ = id => document.getElementById(id);
 const debounce = (fn, wait=300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; };
 const computeAllAndSave = ()=>{ computeAll(); saveState(true); };
 const num = v => { const x = parseFloat(v); return isNaN(x) ? null : x; };
 
-const STORAGE_KEY = 'alertNursingToolData_v5.8';
+const STORAGE_KEY = 'alertNursingToolData_v6.0';
 
 // Ranges
 const normalRanges = {
@@ -55,19 +55,22 @@ const staticInputs = [
   'bl_urea', 'bl_egfr',
   'elec_replace_note', 'goc_note', 'allergies_note', 'pics_note', 'context_other_note', 'pmh_note',
   'adds','lactate','hb','wcc','crp','neut','lymph', 'infusions_note',
-  'dyspneaConcern_note', 'renalConcern_note', 'uopLow_note', 'neuroConcern_note', 'infectionConcern_note',
+  'neuroConcern_note', 'infection_note',
   'electrolyteConcern_note',
-  'after_hours_note', 'pressors_note', 'hist_o2_note', 'rapid_wean_note', 'immobility_note', 'comorb_other_note',
-  'intubation_details', 'hb_dropping_note'
+  'after_hours_note', 'pressors_note', 'hist_o2_note', 'immobility_note', 'comorb_other_note',
+  'intubation_details', 'hb_dropping_note',
+  'resp_context_note', 'renal_context_note'
 ];
 
 const segmentedInputs = [
-  'hb_dropping', 'after_hours', 'pressors', 'hist_o2', 'intubated', 'rapid_wean',
-  'renal', 'uop', 'immobility', 'infection', 'new_bloods_ordered'
+  'hb_dropping', 'after_hours', 'pressors', 'hist_o2', 'intubated',
+  'immobility', 'infection', 'new_bloods_ordered'
 ];
 
 const toggleInputs = [
-  'comorb_copd','comorb_hf','comorb_esrd','comorb_diabetes','comorb_cirrhosis', 'comorb_other'
+  'comorb_copd','comorb_hf','comorb_esrd','comorb_diabetes','comorb_cirrhosis', 'comorb_other',
+  'rr_20', 'rapid_wean',
+  'renal_oliguria', 'renal_fluid_overload', 'renal_oedema', 'renal_dysfunction'
 ];
 
 const selectInputs = [
@@ -151,9 +154,7 @@ function createDeviceEntry(type, value = '', isGhostCandidate = false) {
 
 function checkBloodRanges() {
     for (const [inputId, rangeKey] of Object.entries(rangeMap)) {
-        // EXCEPTION: Skip top scorable inputs so they don't get the small border/text
         if (inputId === 'lactate' || inputId === 'hb') continue;
-        
         const input = $(inputId);
         const rangeSpan = $(inputId + '_range');
         if (!input || !rangeSpan) continue;
@@ -211,7 +212,6 @@ function processDmrNote() {
         }
     };
     
-    // Set text on the new ghost-risk spans (e.g. "Prev: Renal Concern")
     const setGhostRisk = (id, val) => {
         const el = document.getElementById(id);
         if (el && val) {
@@ -219,6 +219,14 @@ function processDmrNote() {
             el.textContent = `(Prev: ${displayVal})`;
         }
     };
+    
+    // Auto-toggle helper
+    const autoToggle = (id, found) => {
+        const el = $(`toggle_${id}`);
+        if(el && found && el.dataset.value === 'false') {
+             el.click(); // Trigger click to handle UI update
+        }
+    }
 
     const extract = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
@@ -282,8 +290,6 @@ function processDmrNote() {
     }
 
     // --- C. Previous Risk Factors (Fixed: Multiline) ---
-    // Captures from Header until the next capitalized section or double newline.
-    // Includes specific lookaheads for PLAN, IMP, SUMMARY, GOC, DEVICES etc.
     const riskBlockMatch = text.match(/IDENTIFIED RISK FACTORS:?\s*\n([\s\S]*?)(?=\n\s*(?:PLAN|IMP|SUMMARY|Alert|Patient|[A-Z][A-Za-z\s]+:)|$)/i);
     
     if (riskBlockMatch && riskBlockMatch[1]) {
@@ -294,42 +300,34 @@ function processDmrNote() {
              $('prevRiskContainer').style.display = 'block';
              
              rawLines.forEach(line => {
-                 // 1. Add to blue list at top
                  let displayTxt = line.replace(/^[-*•]\s*/, '');
                  const d = document.createElement('div');
                  d.className = 'prev-risk-item';
                  d.textContent = "• " + displayTxt;
                  container.appendChild(d);
 
-                 // 2. Map to Ghost Risks on specific questions
                  const lower = line.toLowerCase();
+                 // Mappings
                  if (lower.match(/infection|sepsis|wcc|crp|neut/)) setGhostRisk('ghost_risk_infection', displayTxt);
-                 else if (lower.match(/renal|creatinine|cr\b/)) setGhostRisk('ghost_risk_renal', displayTxt);
-                 else if (lower.match(/urine|uop|oliguria/)) setGhostRisk('ghost_risk_uop', displayTxt);
+                 else if (lower.match(/renal|creatinine|cr\b|oliguria|fluid|oedema/)) setGhostRisk('ghost_risk_renal', displayTxt);
                  else if (lower.match(/neuro|gcs|delirium|confusion|sedation/)) setGhostRisk('ghost_risk_neuro', displayTxt);
-                 else if (lower.match(/respiratory|wob|rr|tachypnea|airway/)) setGhostRisk('ghost_risk_resp', displayTxt);
+                 else if (lower.match(/respiratory|wob|rr|tachypnea|airway|hap/)) setGhostRisk('ghost_risk_resp', displayTxt);
                  else if (lower.match(/vasopressor|norad|metaraminol|bp|hypotension/)) setGhostRisk('ghost_risk_pressors', displayTxt);
                  else if (lower.match(/electrolyte|potassium|magnesium|sodium/)) setGhostRisk('ghost_risk_electrolytes', displayTxt);
-                 else if (lower.match(/immobility|immobile/)) setGhostRisk('ghost_risk_immobility', displayTxt);
+                 else if (lower.match(/inability to sit|immobility|immobile/)) setGhostRisk('ghost_risk_immobility', displayTxt);
                  else if (lower.match(/after-hours|discharge/)) setGhostRisk('ghost_risk_after_hours', displayTxt);
                  else if (lower.match(/hb|anemia|bleeding/)) setGhostRisk('ghost_risk_hb', displayTxt);
                  else if (lower.match(/intubat/)) setGhostRisk('ghost_risk_intubated', displayTxt);
-                 else if (lower.match(/wean/)) setGhostRisk('ghost_risk_rapid_wean', displayTxt);
                  else if (lower.match(/historical/)) setGhostRisk('ghost_risk_hist_o2', displayTxt);
                  else if (lower.match(/oxygen|o2|np|hfnp|niv/)) setGhostRisk('ghost_risk_oxy', displayTxt);
              });
          }
     }
 
-    // --- D. PMH (Fixed: Formatting) ---
-    // Captures block, then cleans excessive newlines
+    // --- D. PMH ---
     const pmhMatch = text.match(/(?:PMH|Past Medical History)\s*[:]?\s*([\s\S]*?)(?=\n(?:O\/E|A-E|Social|ADDS|Medications|Allocated|IDENTIFIED|ALERT)|$)/i);
     if(pmhMatch && pmhMatch[1]) {
-        // Clean up lines: split, trim, filter empty, join with single newline
-        const cleanPmh = pmhMatch[1].split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .join('\n');
+        const cleanPmh = pmhMatch[1].split('\n').map(line => line.trim()).filter(line => line.length > 0).join('\n');
         setFixed('pmh_note', cleanPmh);
     }
     
@@ -342,8 +340,6 @@ function processDmrNote() {
     if(extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i)) setGhost('b_rr', extract(/(?:RR|Resps)\s*[:]?\s*(\d+(?:-\d+)?)/i), true);
     if(extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i)) setGhost('b_spo2', extract(/(?:SpO2|Sats)\s*[:]?\s*(>94|\d+%?)/i).replace('%',''), true);
     
-    // Fix: Temp matches "Afebrile" OR strictly 2+ digits (e.g. 36). 
-    // Prevents matching "1" from dates.
     const temp = extract(/(?:Temp|T)[\s:]+(Afebrile|\d{2}\.?\d{0,2})/i);
     if(temp) setGhost('e_temp', temp, true);
 
@@ -359,10 +355,6 @@ function processDmrNote() {
         if (alertMatch) setGhost('d_alert', alertMatch[0], true);
         const painMatch = dLine.match(/Pain\s*([^,]+)/i);
         if (painMatch) setGhost('d_pain', painMatch[1].trim(), true);
-        else if (dLine.includes('Pain')) {
-             const pParts = dLine.split(/Pain/i);
-             if (pParts[1]) setGhost('d_pain', pParts[1].split(',')[0].trim(), true);
-        }
     }
 
     const bowelsLine = extract(/Bowels:\s*(.*?)(?=\n|$)/i);
@@ -400,8 +392,7 @@ function processDmrNote() {
         }
     }
 
-    // --- G. Devices (Fixed: Multiline) ---
-    // Captures full block until next header.
+    // --- G. Devices ---
     $('devices-container').innerHTML = ''; 
     const deviceBlockMatch = text.match(/DEVICES:?\s*\n([\s\S]*?)(?=\n\s*(?:GOC|IDENTIFIED|PLAN|IMP|ALERT|[A-Z][A-Z\s]+:)|$)/i);
     
@@ -522,8 +513,22 @@ function restoreState(state) {
     const el = $(`toggle_${id}`); if (!el) continue;
     el.dataset.value = state[id] ? 'true' : 'false';
     el.classList.toggle('active', !!state[id]);
+    
+    // UI visibility updates for toggles
     if (id === 'comorb_other' && state[id]) $('comorb_other_note_wrapper').style.display = 'block';
+    
+    // Renal/Resp Context visibility logic handled in computeAll() or generic handlers
   }
+  
+  // Trigger context box updates for toggle groups
+  const checkAny = (ids) => ids.some(id => state[id] === true);
+  if (checkAny(['renal_oliguria','renal_fluid_overload','renal_oedema','renal_dysfunction'])) {
+      $('renal_context_wrapper').style.display = 'block';
+  }
+  if (checkAny(['rr_20','rapid_wean'])) {
+      $('resp_context_wrapper').style.display = 'block';
+  }
+
   for (const groupId of selectInputs) {
     const value = state[groupId]; if (!value) continue;
     const btn = $(groupId).querySelector(`.select-btn[data-value="${value}"]`);
@@ -593,6 +598,11 @@ function clearAllDataSafe() {
     if($('dmrPasteInput')) $('dmrPasteInput').value = '';
     $('mods_inputs').style.display = 'none';
     $('infectionMarkers').style.display = 'none';
+    
+    // Hide context wrappers
+    $('renal_context_wrapper').style.display = 'none';
+    $('resp_context_wrapper').style.display = 'none';
+    $('comorb_other_note_wrapper').style.display = 'none';
 
     // Reset to Post-Stepdown default
     document.querySelector('input[name="reviewType"][value="post"]').checked = true;
@@ -635,7 +645,22 @@ function initialize() {
     el.addEventListener('click', ()=> {
       el.dataset.value = el.dataset.value === 'true' ? 'false' : 'true';
       el.classList.toggle('active', el.dataset.value === 'true');
+      
+      // Toggle Context Visibility Handlers
       if(el.id === 'toggle_comorb_other') $('comorb_other_note_wrapper').style.display = el.dataset.value === 'true' ? 'block' : 'none';
+      
+      if(el.id.includes('renal_')) {
+          const anyRenal = ['toggle_renal_oliguria','toggle_renal_fluid_overload','toggle_renal_oedema','toggle_renal_dysfunction'].some(id => $(id).dataset.value === 'true');
+          $('renal_context_wrapper').style.display = anyRenal ? 'block' : 'none';
+      }
+      
+      if(el.id === 'toggle_rr_20' || el.id === 'toggle_rapid_wean') {
+          const anyResp = ['toggle_rr_20','toggle_rapid_wean'].some(id => $(id).dataset.value === 'true');
+          // Note: Dyspnea severity (select group) also affects this visibility, handled in select-btn listener below
+          const dyspneaVal = $('dyspneaConcern').querySelector('.active')?.dataset.value;
+          $('resp_context_wrapper').style.display = (anyResp || (dyspneaVal && dyspneaVal !== 'none')) ? 'block' : 'none';
+      }
+
       debouncedComputeAndSave();
     });
   });
@@ -647,8 +672,16 @@ function initialize() {
         btn.classList.add('active');
         if (group.id === 'oxMod') toggleOxyFields();
         if (group.id === 'neuroConcern') toggleNeuroFields();
+        
+        // Handle Respiratory Context Visibility for Dyspnea Buttons
+        if (group.id === 'dyspneaConcern') {
+            const anyResp = ['toggle_rr_20','toggle_rapid_wean'].some(id => $(id).dataset.value === 'true');
+            const val = btn.dataset.value;
+            $('resp_context_wrapper').style.display = (anyResp || (val && val !== 'none')) ? 'block' : 'none';
+        }
+
         const noteWrapper = $(group.id + '_note_wrapper');
-        if(noteWrapper && group.id !== 'neuroConcern') noteWrapper.style.display = (btn.dataset.value !== 'none' && btn.dataset.value !== '') ? 'block' : 'none';
+        if(noteWrapper && group.id !== 'neuroConcern' && group.id !== 'dyspneaConcern') noteWrapper.style.display = (btn.dataset.value !== 'none' && btn.dataset.value !== '') ? 'block' : 'none';
         debouncedComputeAndSave();
       });
     });
@@ -851,6 +884,7 @@ function computeAll() {
   const flaggedElements = { red: [], amber: [] };
   
   const addRisk = (list, text, note, elementId, flagType) => {
+    // For context notes (Resp/Renal), they are global to the section, so we might append them differently or pass null
     if (note && note.trim()) list.push(`${text} (${note.trim()})`);
     else list.push(text);
     if (elementId && flagType) flaggedElements[flagType].push(elementId);
@@ -868,7 +902,7 @@ function computeAll() {
 
   if ((immobility && icuLos >= 4) || (icuLos >= 4 && hasSignificantFlags)) {
       let reason = (immobility && icuLos >= 4)
-          ? `Immobility >48h + ICU LOS ${icuLos} days`
+          ? `Inability to sit (assisted/unassisted) + ICU LOS ${icuLos} days`
           : `ICU LOS ${icuLos} days + Significant flag (${pressorsRed ? 'vasopressors required' : 'lactate >2'})`;
       red.push(reason);
       if (immobility) flaggedElements.red.push('seg_immobility');
@@ -878,25 +912,56 @@ function computeAll() {
       hasCombinedRedFlag = true;
   }
 
-  if (immobility && !hasCombinedRedFlag) addRisk(amber, 'Immobility >48h', s.immobility_note, 'seg_immobility', 'amber');
+  if (immobility && !hasCombinedRedFlag) addRisk(amber, 'Inability to sit in chair (with or without assistance)', s.immobility_note, 'seg_immobility', 'amber');
   if (icuLos > 7 && !hasCombinedRedFlag) { amber.push(`ICU LOS ${icuLos} days`); flaggedElements.amber.push('icuLos'); }
 
   const oxModGroup = $('oxMod');
+  let highO2 = false;
   if (s.oxMod === 'NP') {
     const flow = num(s.npFlow);
-    if (flow !== null && flow >= 3) { red.push(`NP flow ${flow} L/min`); flaggedElements.red.push('npFlow'); }
+    if (flow !== null && flow >= 3) highO2 = true;
+    if (flow !== null && flow >= 4) { red.push(`NP flow ${flow} L/min`); flaggedElements.red.push('npFlow'); }
     else if (flow !== null && flow >= 2) { amber.push(`NP flow ${flow} L/min`); flaggedElements.amber.push('npFlow');}
   } else if (s.oxMod === 'HFNP') {
+    highO2 = true;
     const fio2 = num(s.hfnpFio2), flow = num(s.hfnpFlow);
     if (fio2 > 30 || flow > 30) { red.push(`HFNP concern`); flaggedElements.red.push(oxModGroup.id); }
     else if ((fio2 > 21) || (flow > 0)) { amber.push('On HFNP (low settings)'); flaggedElements.amber.push(oxModGroup.id); }
   } else if (s.oxMod === 'NIV') {
+    highO2 = true;
     red.push('On NIV'); flaggedElements.red.push(oxModGroup.id);
   } else if (s.oxMod === 'Trache') {
+      highO2 = true;
       const ts = s.tracheStatus;
       if (ts === 'New') addRisk(red, s.tracheType||'Trache', null, 'oxMod', 'red');
       else addRisk(amber, s.tracheType||'Trache', null, 'oxMod', 'amber');
   }
+
+  // === RESPIRATORY / HAP SYNDROME LOGIC ===
+  const rrVal = num(s.b_rr) || 0;
+  const isTachypnea = (s.rr_20 === true) || (rrVal > 20);
+  const isRapidWean = (s.rapid_wean === true);
+  const dyspneaSev = s.dyspneaConcern; // none, mild, mod, severe
+  
+  let hapTriggers = 0;
+  if (isTachypnea || dyspneaSev === 'mod' || dyspneaSev === 'severe') hapTriggers++;
+  if (highO2) hapTriggers++;
+  if (isRapidWean) hapTriggers++;
+
+  if (hapTriggers >= 2) {
+      // Syndrome detected -> Combine into one high priority flag
+      red.unshift(`* Increased risk of HAP (Tachypnea, High O2 demand) [${s.resp_context_note || ''}]`);
+      flaggedElements.red.push('toggle_rr_20', 'toggle_rapid_wean', 'oxMod');
+  } else {
+      // Individual Flags
+      if (s.dyspneaConcern === 'severe') addRisk(red, 'Severe respiratory concern', s.resp_context_note, 'dyspneaConcern', 'red');
+      else if (s.dyspneaConcern === 'mod') addRisk(red, 'Moderate respiratory concern', s.resp_context_note, 'dyspneaConcern', 'red');
+      else if (s.dyspneaConcern === 'mild') addRisk(amber, 'Mild respiratory concern', s.resp_context_note, 'dyspneaConcern', 'amber');
+
+      if (isTachypnea) { amber.push('RR > 20'); flaggedElements.amber.push('toggle_rr_20'); }
+      if (isRapidWean) { red.push('Rapid oxygen wean in last 12h'); flaggedElements.red.push('toggle_rapid_wean'); }
+  }
+
 
   if (s.hist_o2 === true) addRisk(red, 'Historical high O2/NIV', s.hist_o2_note, 'seg_hist_o2', 'red');
   if (s.intubated === true) {
@@ -906,7 +971,6 @@ function computeAll() {
       else addRisk(amber, `${label} (Routine/Elective)`, s.intubation_details, 'seg_intubated', 'amber');
   }
 
-  if (s.rapid_wean === true) addRisk(red, 'Rapid oxygen wean in last 12h', s.rapid_wean_note, 'seg_rapid_wean', 'red');
   if (s.after_hours === true) addRisk(amber, 'Discharged after-hours', s.after_hours_note, 'seg_after_hours', 'amber');
 
   if (pressorsRed && !hasCombinedRedFlag) addRisk(red, 'Vasopressors required (Shock/Complicated)', s.pressors_note, 'seg_pressors', 'red');
@@ -915,8 +979,48 @@ function computeAll() {
   if (lactateVal > 2.5) { red.push(`Lactate ${lactateVal}`); flaggedElements.red.push('lactate');}
   else if (lactateVal >= 2.0 && !hasCombinedRedFlag) { amber.push(`Lactate ${lactateVal}`); flaggedElements.amber.push('lactate');}
 
-  if (s.uop === true) addRisk(red, 'UOP concerning / downtrending', s.uop_note, 'seg_uop', 'red');
-  if (s.renal === true) addRisk(red, 'Renal Concern', s.renal_note, 'seg_renal', 'red');
+  // === RENAL & FLUID LOGIC ===
+  const rOliguria = s.renal_oliguria === true;
+  const rFluid = s.renal_fluid_overload === true;
+  const rOedema = s.renal_oedema === true;
+  const rDysfunction = s.renal_dysfunction === true;
+  
+  let renalCount = 0;
+  if (rOliguria) renalCount++;
+  if (rFluid) renalCount++;
+  if (rOedema) renalCount++;
+  if (rDysfunction) renalCount++;
+
+  if (renalCount > 0) {
+      let labelPrefix = "";
+      if (rDysfunction && !rOliguria && !rFluid && !rOedema) labelPrefix = "[RENAL]";
+      else if (!rDysfunction && (rOliguria || rFluid || rOedema)) labelPrefix = "[FLUID]";
+      else labelPrefix = "[FLUID / RENAL]";
+
+      const details = [];
+      if (rOliguria) details.push("Oliguria");
+      if (rFluid) details.push("Fluid Overload");
+      if (rOedema) details.push("Pitting Oedema");
+      if (rDysfunction) details.push("Renal Dysfunction");
+      
+      const note = s.renal_context_note ? ` - ${s.renal_context_note}` : "";
+      const text = `${labelPrefix} ${details.join(", ")}${note}`;
+
+      if (renalCount >= 2) {
+          // Promotion: Red + Asterisk + Top
+          red.unshift(`* ${text}`);
+          ['toggle_renal_oliguria','toggle_renal_fluid_overload','toggle_renal_oedema','toggle_renal_dysfunction'].forEach(id => flaggedElements.red.push(id));
+      } else {
+          // Single Trigger logic
+          if (rDysfunction || rOliguria) {
+              red.push(text);
+              ['toggle_renal_oliguria','toggle_renal_dysfunction'].forEach(id => flaggedElements.red.push(id));
+          } else {
+              amber.push(text);
+              ['toggle_renal_fluid_overload','toggle_renal_oedema'].forEach(id => flaggedElements.amber.push(id));
+          }
+      }
+  }
 
   if (s.neuroConcern === 'severe') addRisk(red, 'Severe Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
   else if (s.neuroConcern === 'mod') addRisk(red, 'Moderate Neuro Concern', s.neuroConcern_note, 'neuroConcern', 'red');
@@ -924,10 +1028,6 @@ function computeAll() {
 
   if (s.electrolyteConcern === 'severe') addRisk(red, 'Severe electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'red');
   else if (s.electrolyteConcern === 'mild') addRisk(amber, 'Electrolyte concern', s.electrolyteConcern_note, 'electrolyteConcern', 'amber');
-
-  if (s.dyspneaConcern === 'severe') addRisk(red, 'Severe respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
-  else if (s.dyspneaConcern === 'mod') addRisk(red, 'Moderate respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'red');
-  else if (s.dyspneaConcern === 'mild') addRisk(amber, 'Mild respiratory concern', s.dyspneaConcern_note, 'dyspneaConcern', 'amber');
 
   const hb = num(s.hb);
   if (hb !== null && hb <= 70) { red.push(`Anemia concern (Hb ${hb})`); flaggedElements.red.push('hb'); }
@@ -942,7 +1042,7 @@ function computeAll() {
      let cat = 'red'; addRisk(red, 'Infection Concern', s.infection_note, 'seg_infection', cat);
   }
 
-  // --- ADDS Logic (Modified) ---
+  // --- ADDS Logic ---
   const addsVal = num(s.adds);
   if (addsVal !== null) {
       if (addsVal >= 4) {
@@ -952,20 +1052,33 @@ function computeAll() {
       else if (addsVal === 3) {
           // Check time constraint (Only relevant for first 24h)
           const wardTimeObj = calculateTimeOnWard(s.stepdownDate, s.stepdownTime);
-          const hours = wardTimeObj.hours !== null ? wardTimeObj.hours : 0; // Default to 0 (fresh) if date missing to be safe
+          const hours = wardTimeObj.hours !== null ? wardTimeObj.hours : 0; 
           
           if (hours <= 24) {
                if (red.length > 0 || amber.length > 0) {
-                   // Context Rule: Red if other flags exist
                    red.push(`ADDS 3 + Other Factors (First 24h)`);
                    flaggedElements.red.push('adds');
                } else {
-                   // Clean Sheet Rule: Amber if no other flags
                    amber.push(`ADDS 3 (First 24h)`);
                    flaggedElements.amber.push('adds');
                }
           }
-          // If > 24h, ADDS 3 is ignored (Green)
+      }
+  }
+
+  // === AGE / FRAILTY MULTIPLIER ===
+  const age = num(s.ptAge);
+  if (age !== null && age > 75) {
+      if (red.length > 0 || amber.length > 0) {
+          // Upgrade logic handled implicitly by adding a Red Flag or by the CAT logic below?
+          // The request is: "Any Amber Flag = Upgrade to CAT 1".
+          // If we are already RED, we stay RED. If we are AMBER, we become RED.
+          // We add a text line to risk factors.
+          red.push("Age >75 (frailty concern due to presence of other risk factors)");
+          flaggedElements.red.push('ptAge');
+      } else {
+          // Green patient >75. Just a note in summary, no flag upgrade.
+          // We won't push to Red/Amber here to keep it Green.
       }
   }
 
@@ -1146,10 +1259,9 @@ function generateSummary(s, cat, location, wardTimeText, red, amber) {
     const bloods = bloodParts.map(k => {
       let v = s[`bl_${k}`]; if (!v) return null;
       const trend = s[`bl_${k}_trend`] || '';
-      
       const ghostEl = document.getElementById('ghost_bl_' + k);
       if (ghostEl && ghostEl.textContent && ghostEl.textContent.trim().length > 0) {
-          v += " " + ghostEl.textContent.trim().replace('Prev: ', ''); // Remove prev from summary if present
+          v += " " + ghostEl.textContent.trim().replace('Prev: ', ''); 
       }
       return `${bloodLabelMap[k]} ${v}${trendWord(trend)}`;
     }).filter(Boolean).join(', ');
