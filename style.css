@@ -46,7 +46,7 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .label-row label { margin-bottom: 0; }
 
 .ghost-val {
-    font-size: 0.75rem; /* Reduced slightly to fit "Prev: " prefix */
+    font-size: 0.75rem; 
     color: var(--blue-hint);
     font-weight: 700;
     white-space: nowrap;
@@ -112,6 +112,25 @@ textarea{min-height:60px; resize:vertical; max-height:240px;}
 .question-label small { font-weight: 400; font-size: 0.8rem; opacity: 0.8; margin-left: 4px;}
 .sub-question-wrapper { margin-left: 14px; padding-left: 12px; border-left: 2px solid var(--line); margin-bottom: 10px; display: none; margin-top:8px;}
 .sub-question-wrapper.show { display: block; animation: fadeIn .2s; }
+
+/* --- Tree Boxes --- */
+.tree-box {
+    margin-top: 10px;
+    margin-bottom: 20px;
+    padding: 14px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    border-left: 4px solid var(--accent);
+    animation: fadeIn .2s;
+}
+
+.section-divider {
+    border: none;
+    height: 1px;
+    background-color: var(--line);
+    margin: 24px 0 24px 0;
+}
 
 /* --- Grids --- */
 .comorbidity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
