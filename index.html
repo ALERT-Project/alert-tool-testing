@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ALERT Nursing Risk Assessment Tool v5.8</title>
+  <title>ALERT Nursing Risk Assessment Tool v6.0</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -231,16 +231,31 @@
       </div>
     </div>
 
-    <div class="question-row">
-      <div class="question-label">Respiratory Concern? <span id="ghost_risk_resp" class="ghost-risk"></span></div>
-        <div class="button-group" id="dyspneaConcern">
-          <button class="select-btn safe" data-value="none">None</button>
-          <button class="select-btn" data-value="mild">Mild</button>
-          <button class="select-btn" data-value="mod">Moderate</button>
-          <button class="select-btn" data-value="severe">Severe</button>
+    <div class="question-row" style="background:var(--bg); padding:10px; border-radius:10px; border:1px solid var(--line);">
+        <div class="question-label">Respiratory concern? <span id="ghost_risk_resp" class="ghost-risk"></span></div>
+        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:8px;">Tachypnea, dyspnea, recent or current high O2 or recent rapid wean.</div>
+        
+        <div class="grid">
+            <div class="col-12">
+                <label>Dyspnea / WOB Severity</label>
+                <div class="button-group" id="dyspneaConcern">
+                  <button class="select-btn safe" data-value="none">None</button>
+                  <button class="select-btn" data-value="mild">Mild</button>
+                  <button class="select-btn" data-value="mod">Moderate</button>
+                  <button class="select-btn" data-value="severe">Severe</button>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="toggle-label" id="toggle_rr_20" data-value="false" role="button" aria-pressed="false">RR > 20 <span class="state"></span></div>
+            </div>
+            <div class="col-6">
+                 <div class="toggle-label" id="toggle_rapid_wean" data-value="false" role="button" aria-pressed="false">Rapid Wean (12h) <span class="state"></span></div>
+            </div>
         </div>
-        <div id="dyspneaConcern_note_wrapper" class="concern-note" style="display:none;">
-            <textarea id="dyspneaConcern_note" placeholder="Optional: e.g., tachypnea, increased WOB, dyspnea"></textarea>
+        
+        <div id="resp_context_wrapper" class="concern-note" style="display:none; margin-top:8px;">
+            <label for="resp_context_note">Respiratory Clinical Context</label>
+            <textarea id="resp_context_note" placeholder="E.g. Tachypnea, increased WOB, secretion burden..."></textarea>
         </div>
     </div>
     
@@ -273,17 +288,6 @@
     </div>
 
     <div class="question-row">
-        <div class="question-label">Rapid oxygen wean in last 12h? <span id="ghost_risk_rapid_wean" class="ghost-risk"></span></div>
-        <div class="segmented-group" id="seg_rapid_wean">
-            <button class="seg-btn" data-value="true">Yes</button>
-            <button class="seg-btn" data-value="false">No</button>
-        </div>
-    </div>
-    <div id="rapid_wean_note_wrapper" class="concern-note" style="display:none; margin-bottom:12px;">
-         <textarea id="rapid_wean_note" placeholder="Optional: enter details"></textarea>
-    </div>
-
-    <div class="question-row">
       <div class="question-label">Neurological Concern? <span id="ghost_risk_neuro" class="ghost-risk"></span></div>
       <div class="button-group" id="neuroConcern">
         <button class="select-btn safe" data-value="none">None</button>
@@ -301,29 +305,20 @@
       </div>
     </div>
     
-    <div class="question-row">
-        <div class="question-label">Renal Concern? <small>(AKI, rising Cr, or ESRD/dialysis)</small> <span id="ghost_risk_renal" class="ghost-risk"></span></div>
-        <div class="segmented-group" id="seg_renal">
-            <button class="seg-btn" data-value="true">Yes</button>
-            <button class="seg-btn" data-value="false">No</button>
-        </div>
-    </div>
-    <div id="renal_note_wrapper" class="concern-note" style="display:none; margin-bottom:12px;">
-         <textarea id="renal_note" placeholder="Optional: enter details"></textarea>
-    </div>
-
-    <div class="question-row">
-        <div class="question-label">UOP concerning / downtrending? <small>(&lt;0.5 mL/kg/hr)</small> <span id="ghost_risk_uop" class="ghost-risk"></span></div>
-        <div class="segmented-group" id="seg_uop">
-            <button class="seg-btn" data-value="true">Yes</button>
-            <button class="seg-btn" data-value="false">No</button>
-        </div>
-    </div>
-    <div id="uop_note_wrapper" class="concern-note" style="display:none; margin-bottom:12px;">
-         <textarea id="uop_note" placeholder="Optional: enter urine output details"></textarea>
+    <div class="input-group">
+      <div class="section-title" style="margin-top:12px;">Renal, Fluid Balance or UOP concern? <span id="ghost_risk_renal" class="ghost-risk"></span></div>
+      <div class="comorbidity-grid">
+        <div class="toggle-label" id="toggle_renal_oliguria" data-value="false" role="button" aria-pressed="false">Oliguria (&lt;0.5ml/kg) <span class="state"></span></div>
+        <div class="toggle-label" id="toggle_renal_fluid_overload" data-value="false" role="button" aria-pressed="false">Fluid Overload <span class="state"></span></div>
+        <div class="toggle-label" id="toggle_renal_oedema" data-value="false" role="button" aria-pressed="false">Pitting Oedema <span class="state"></span></div>
+        <div class="toggle-label" id="toggle_renal_dysfunction" data-value="false" role="button" aria-pressed="false">Renal Dysfunction <span class="state"></span></div>
+      </div>
+      <div id="renal_context_wrapper" class="concern-note" style="display:none; margin-top: 10px;">
+          <textarea id="renal_context_note" placeholder="Renal/Fluid Details..."></textarea>
+      </div>
     </div>
     
-    <div class="question-row">
+    <div class="question-row" style="margin-top:18px;">
       <div class="question-label">Electrolyte Concern? <span id="ghost_risk_electrolytes" class="ghost-risk"></span></div>
       <div class="button-group" id="electrolyteConcern" role="tablist">
         <button class="select-btn safe" data-value="none">None</button>
@@ -347,7 +342,7 @@
     </div>
     
     <div class="question-row">
-        <div class="question-label">Immobility >48h? <span id="ghost_risk_immobility" class="ghost-risk"></span></div>
+        <div class="question-label">Inability to sit in chair (with or without assistance)? <span id="ghost_risk_immobility" class="ghost-risk"></span></div>
         <div class="segmented-group" id="seg_immobility">
             <button class="seg-btn" data-value="true">Yes</button>
             <button class="seg-btn" data-value="false">No</button>
