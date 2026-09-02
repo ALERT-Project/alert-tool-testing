@@ -7,7 +7,7 @@
 
 import { STORAGE_KEY, UNDO_KEY, ACCORDION_KEY, staticInputs, segmentedInputs, toggleInputs, selectInputs, deviceTypes } from './config.js';
 import { $, showToast } from './utils.js';
-import { handleSegmentClick, updateWardOptions, updateReviewTypeVisibility, updateWardOtherVisibility, createDeviceEntry, updateDevicesSectionVisibility, toggleOxyFields, toggleInfusionsBox, toggleBowelDate } from './ui.js';
+import { handleSegmentClick, updateWardOptions, updateReviewTypeVisibility, updateReviewerRoleVisibility, updateWardOtherVisibility, createDeviceEntry, updateDevicesSectionVisibility, toggleOxyFields, toggleInfusionsBox, toggleBowelDate } from './ui.js';
 
 window.prevBloods = {};
 
@@ -420,7 +420,12 @@ export function getState() {
     });
 
     state['reviewType'] = document.querySelector('input[name="reviewType"]:checked')?.value || 'post';
-    state['clinicianRole'] = document.querySelector('input[name="clinicianRole"]:checked')?.value || 'ALERT CNS';
+    // One role string out of two toggles. Everything downstream - the note heading, the
+    // handover, REDCap - still reads a single 'ALERT CNS' / 'ICU CNC' value; only the two
+    // controls that produce it are new.
+    const reviewTeam = document.querySelector('input[name="reviewTeam"]:checked')?.value || 'ALERT';
+    const clinicianGrade = document.querySelector('input[name="clinicianGrade"]:checked')?.value || 'CNS';
+    state['clinicianRole'] = `${reviewTeam} ${clinicianGrade}`;
     // Empty, not 'physical', when nothing is ticked: defaulting here would restore as a real
     // answer and satisfy the prompt on the generate button without anyone having chosen.
     state['reviewModeType'] = document.querySelector('input[name="reviewModeType"]:checked')?.value || '';
@@ -526,8 +531,15 @@ export function restoreState(state) {
         updateReviewTypeVisibility();
     }
     if (state['clinicianRole']) {
-        const r = document.querySelector(`input[name="clinicianRole"][value="${state['clinicianRole']}"]`);
-        if (r) r.checked = true;
+        // Split back into the two toggles it was composed from. updateReviewerRoleVisibility()
+        // then re-applies the team's own rules, so a restored ICU CNC on a post review lands
+        // back on ALERT rather than being restored into a state the form cannot offer.
+        const [team, grade] = state['clinicianRole'].split(' ');
+        const t = document.querySelector(`input[name="reviewTeam"][value="${team}"]`);
+        if (t) t.checked = true;
+        const g = document.querySelector(`input[name="clinicianGrade"][value="${grade}"]`);
+        if (g) g.checked = true;
+        updateReviewerRoleVisibility();
     }
     if (state['reviewModeType']) {
         const r = document.querySelector(`input[name="reviewModeType"][value="${state['reviewModeType']}"]`);

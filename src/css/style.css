@@ -681,6 +681,29 @@ body.quick-review-active .device-add-group { margin-bottom: 0; }
 
 /* Issues: dense enough that a dozen fit without scrolling. */
 .issues-count { font-size: var(--fs-xs); font-weight: var(--fw-normal); color: var(--muted); }
+
+/* Quick Review section chips: what this card is holding, for cards that hide their own
+   contents. Quiet by design - they confirm, they don't compete with the data. Shown only
+   when they have something to say, and only in Quick Review, where the panels are shut. */
+.qr-chip { display: none; }
+body.quick-review-active .qr-chip[data-filled] {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+/* .accordion is a space-between flex row, which would strand the chip in the middle of the
+   bar between the title and the chevron. The auto margin eats the free space to its right so
+   the chip sits against the title it belongs to and the chevron keeps the far edge. */
+body.quick-review-active .accordion .qr-chip[data-filled] { margin-right: auto; }
 .issue-add-row { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
 .issue-add-row input { flex: 1; min-width: 0; margin: 0; }
 .issue-add-row .btn { flex: 0 0 auto; padding: 8px 14px; font-weight: var(--fw-semibold); }
@@ -1191,6 +1214,13 @@ textarea { min-height: 80px; resize: vertical; max-height: 240px; }
 .radio-segmented-group label:last-child {
   border-right: none;
 }
+
+/* A grade that doesn't exist for the selected team. display:none rather than visibility, so
+   the remaining buttons take the whole width instead of leaving a gap. */
+.radio-segmented-group label[hidden] { display: none; }
+/* :last-child is structural and doesn't follow what's on screen, so the visible end of a
+   group with a hidden button is marked by JS - otherwise its divider doubles the border. */
+.radio-segmented-group label.rsg-edge { border-right: none; }
 
 .radio-segmented-group input[type="radio"],
 .radio-segmented-group input[type="checkbox"] {

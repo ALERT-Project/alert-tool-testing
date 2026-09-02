@@ -1989,3 +1989,113 @@ test('cancelling the overwrite keeps both the form and the pasted note', async (
     assert.match(document.getElementById('importText').value, /XYZ/, 'with the note still in it');
     close();
 });
+
+// --- Who did the review: team and grade -------------------------------------------------
+//
+// The team is Pre-Stepdown only, and hiding it is not enough on its own: a concealed ICU
+// still prints "ICU CNS" at the head of a post-stepdown note, so these check the value is
+// pushed back to ALERT rather than merely put out of sight.
+
+const shown = (window, selector) => {
+    const el = window.document.querySelector(selector);
+    return !!el && !el.hidden && el.style.display !== 'none';
+};
+
+test('the reviewing team is offered Pre-Stepdown only, and forced back to ALERT on the way out', async () => {
+    const { window, close } = await loadTool();
+    assert.equal(shown(window, '#reviewTeamWrapper'), false, 'no team toggle on a post review');
+    assert.equal(shown(window, '#btnRedcap'), true, 'REDCap is an ALERT activity, and this is ALERT');
+
+    click(window, 'input[name="reviewType"][value="pre"]');
+    await tick(window);
+    assert.equal(shown(window, '#reviewTeamWrapper'), true, 'offered pre-stepdown');
+
+    click(window, 'input[name="reviewTeam"][value="ICU"]');
+    await tick(window);
+    assert.equal(shown(window, '#clinicianGradeToggle label[data-team="ALERT"]'), false, 'no CN in ICU');
+    assert.equal(shown(window, '#clinicianGradeToggle label[data-team="ICU"]'), true, 'CNC is an ICU grade');
+    assert.equal(shown(window, '#btnRedcap'), false,
+        'alert_team has no code that would be true of an ICU reviewer, so the button goes');
+
+    click(window, 'input[name="clinicianGrade"][value="CNC"]');
+    click(window, 'input[name="reviewType"][value="post"]');
+    await tick(window);
+    assert.equal(window.document.querySelector('input[name="reviewTeam"]:checked').value, 'ALERT',
+        'the team is reset, not just hidden');
+    assert.equal(window.document.querySelector('input[name="clinicianGrade"]:checked').value, 'CNS',
+        'a grade the new team does not hold falls back to the one they share');
+    assert.equal(shown(window, '#btnRedcap'), true, 'and REDCap comes back');
+    close();
+});
+
+test('an ICU CNC pre-stepdown review says so at the head of the note', async () => {
+    const { window, close } = await loadTool();
+    click(window, 'input[name="reviewType"][value="pre"]');
+    await tick(window);
+    click(window, 'input[name="reviewTeam"][value="ICU"]');
+    await tick(window);
+    click(window, 'input[name="clinicianGrade"][value="CNC"]');
+    type(window, 'ptName', 'ABC');
+    type(window, 'adds', '2');
+    await tick(window, 600);
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+    const note = window.document.getElementById('summary').value;
+    assert.match(note.split('\n')[0], /^ICU CNC Pre-Stepdown Review - Physical review$/);
+    close();
+});
+
+// --- Quick Review section chips ----------------------------------------------------------
+//
+// Quick Review shuts the bloods panel and floats the calculator, so a card that holds six
+// results looks exactly like one that holds none. The chips say what is on each card. What
+// they must never do is promise more than the note goes on to print.
+
+const chipText = (window, id) => window.document.getElementById(id).textContent;
+
+test('the Quick Review chips report what each card is holding', async () => {
+    const { window, close } = await loadTool();
+    type(window, 'adds', '4');
+    type(window, 'bl_k', '3.1');
+    type(window, 'bl_cr_review', '180');
+    await tick(window, 600);
+    assert.equal(chipText(window, 'qrChipBloods'), '', 'silent in full review - nothing is hidden there');
+
+    click(window, 'input[name="reviewDepth"][value="quick"]');
+    await tick(window, 700);
+    assert.equal(chipText(window, 'qrChipAdds'), '✓ ADDS 4');
+    assert.equal(chipText(window, 'qrChipBloods'), '✓ 2 results entered');
+    assert.equal(chipText(window, 'qrChipDevices'), '', 'no lines, nothing to report');
+
+    // The three quick buttons are an answer in themselves, not a count of zero.
+    click(window, '#seg_bloods_status .seg-btn[data-value="nil_sig"]');
+    await tick(window, 600);
+    assert.equal(chipText(window, 'qrChipBloods'), '✓ Nil significant');
+
+    click(window, '[data-device-type="PIVC"]');
+    await tick(window, 600);
+    assert.equal(chipText(window, 'qrChipDevices'), '✓ 1 recorded');
+
+    click(window, 'input[name="reviewDepth"][value="full"]');
+    await tick(window, 700);
+    assert.equal(chipText(window, 'qrChipAdds'), '', 'taken off on the way out');
+    close();
+});
+
+test('the bloods chip never counts a result the note leaves out', async () => {
+    const { window, close } = await loadTool();
+    type(window, 'ptName', 'ABC');
+    type(window, 'bl_wcc', '14');
+    type(window, 'bl_mg', '0.6');
+    await tick(window, 600);
+    click(window, 'input[name="reviewDepth"][value="quick"]');
+    await tick(window, 700);
+    const claimed = Number(chipText(window, 'qrChipBloods').match(/(\d+)/)[1]);
+
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+    const line = window.document.getElementById('summary').value.split('\n').find(l => l.startsWith('Bloods'));
+    const printed = line.split(': ')[1].split(', ').length;
+    assert.equal(claimed, printed, `the chip claimed ${claimed}; the note printed ${printed} — "${line}"`);
+    close();
+});

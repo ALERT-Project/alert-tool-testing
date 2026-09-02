@@ -7,7 +7,7 @@
 
 import { $, debounce, showToast, disableAutofill, iconSetForPath } from './utils.js';
 import { setNotice, clearNotice, NOTICE_PRIORITY } from './notices.js';
-import { normalRanges, comorbMap, toggleInputs, staticInputs, ACCORDION_KEY, STORAGE_KEY, UNDO_KEY, SELF_DERIVED_RISK, GATE_RISK_ID} from './config.js';
+import { normalRanges, comorbMap, toggleInputs, staticInputs, ACCORDION_KEY, STORAGE_KEY, UNDO_KEY, SELF_DERIVED_RISK, GATE_RISK_ID, NOTE_BLOOD_LABELS} from './config.js';
 import {
     getState, saveState, pushUndo, isQuickReviewMode, setQuickReviewMode, initialQuickReviewRisks,
     setInitialQuickReviewRisks, quickReviewBaselineCaptured, setQuickReviewBaselineCaptured,
@@ -144,6 +144,57 @@ export function updateReviewTypeVisibility() {
     if (alertActionsSection) alertActionsSection.style.display = (type === 'post') ? 'block' : 'none';
 
     if (type === 'pre') { const c = $('chk_discharge_alert'); if (c) c.checked = false; }
+
+    updateReviewerRoleVisibility();
+}
+
+// Who did the review, in two parts. The team is offered only Pre-Stepdown, where an ICU CNS or
+// CNC sometimes reviews a patient of concern before they leave the unit; every Post-Stepdown
+// review is ALERT by definition, so the toggle is hidden there and its value pushed back to
+// ALERT rather than merely concealed - a hidden ICU still prints "ICU CNS" at the head of a
+// post-stepdown note.
+//
+// Grades follow the team: ALERT is CNS or CN, ICU is CNS or CNC. Each grade's label carries
+// the teams it exists in, so the pairing lives beside the button rather than in a table here.
+// A grade that doesn't survive the switch falls back to CNS, the one grade both teams hold.
+export function updateReviewerRoleVisibility() {
+    const type = document.querySelector('input[name="reviewType"]:checked')?.value || 'post';
+    const isPre = (type === 'pre');
+
+    const teamWrapper = $('reviewTeamWrapper');
+    if (teamWrapper) teamWrapper.style.display = isPre ? '' : 'none';
+    if (!isPre) {
+        const alertTeam = document.querySelector('input[name="reviewTeam"][value="ALERT"]');
+        if (alertTeam) alertTeam.checked = true;
+    }
+
+    const team = document.querySelector('input[name="reviewTeam"]:checked')?.value || 'ALERT';
+
+    const grades = document.querySelectorAll('#clinicianGradeToggle label[data-team]');
+    let lastVisible = null;
+    grades.forEach(label => {
+        const available = label.dataset.team.split(' ').includes(team);
+        label.hidden = !available;
+        // The group's rounded edge is drawn by :last-child dropping its divider, which is
+        // structural: hiding the real last button leaves the visible one with a divider
+        // doubling the group's own border. So the visible end is marked here instead.
+        label.classList.remove('rsg-edge');
+        if (available) lastVisible = label;
+        const radio = label.querySelector('input[type="radio"]');
+        if (!available && radio?.checked) radio.checked = false;
+    });
+    if (lastVisible) lastVisible.classList.add('rsg-edge');
+
+    if (!document.querySelector('input[name="clinicianGrade"]:checked')) {
+        const cns = document.querySelector('input[name="clinicianGrade"][value="CNS"]');
+        if (cns) cns.checked = true;
+    }
+
+    // An ICU review is not ALERT activity, and REDCap's alert_team has no code that would be
+    // true of an ICU reviewer. Rather than post a team the reviewer isn't on, the accelerator
+    // is taken off the page for the duration.
+    const redcap = $('btnRedcap');
+    if (redcap) redcap.style.display = (team === 'ICU') ? 'none' : '';
 }
 
 export function updateWardOtherVisibility() {
@@ -811,6 +862,61 @@ function watchAddsCalculator() {
     sync();
 }
 
+// What a Quick Review card is holding, said on the card itself.
+//
+// Quick Review closes the bloods panel behind three buttons and floats the ADDS calculator
+// over the page, so entering six results and shutting the panel leaves a card identical to
+// the one you started with. There was nothing on screen that said the numbers had been taken,
+// and clinicians reasonably read that absence as "it didn't keep them" - then entered them
+// again, or opened the panel to check.
+//
+// The wording is deliberately about the form, not about storage: "6 results entered" says
+// what is on the page and destined for the note. Nothing here is saved anywhere, and a chip
+// reading "logged" or "saved" would be reassuring about the one thing this tool does not do.
+//
+// Derived from state on every compute pass rather than tracked: there is no flag to leave
+// stale, and clearing a field takes its chip away with it. The spans live in the markup
+// beside what they describe, so they travel with their cards into #quickGrid and back.
+function setChip(id, text) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = text || '';
+    if (text) el.setAttribute('data-filled', 'true');
+    else el.removeAttribute('data-filled');
+}
+
+export function renderQuickChips(s) {
+    if (!isQuickReviewMode) {
+        ['qrChipAdds', 'qrChipBloods', 'qrChipDevices'].forEach(id => setChip(id, ''));
+        return;
+    }
+
+    // The score, and which scale it is on. No claim about where it came from: the calculator
+    // and a typed number produce the same figure, and #adds_calc_hint already speaks up in
+    // the one case where the two disagree.
+    const adds = (s.adds ?? '').toString().trim();
+    const isMods = $('addsManual')?.value === 'true';
+    setChip('qrChipAdds', adds ? `✓ ${isMods ? 'MODS' : 'ADDS'} ${adds}` : '');
+
+    // The three quick buttons are an answer in their own right, so they get reported as the
+    // answer they are rather than as a count of zero results.
+    if (s.chk_bloods_nil_sig || s.bloods_status === 'nil_sig') {
+        setChip('qrChipBloods', '✓ Nil significant');
+    } else if (s.bloods_status === 'improving') {
+        setChip('qrChipBloods', '✓ Improving');
+    } else if (s.bloods_status === 'not_checked') {
+        setChip('qrChipBloods', '✓ Not checked');
+    } else {
+        // Counted off the note's own map, so the chip can never promise a result the note
+        // then leaves out.
+        const n = Object.keys(NOTE_BLOOD_LABELS).filter(k => s[`bl_${k}`]).length;
+        setChip('qrChipBloods', n ? `✓ ${n} result${n === 1 ? '' : 's'} entered` : '');
+    }
+
+    const lines = document.querySelectorAll('#devices-container .device-entry').length;
+    setChip('qrChipDevices', lines ? `✓ ${lines} recorded` : '');
+}
+
 export function closeQuickOverlays() {
     const wrapper = $('adds_wrapper');
     if (wrapper?.classList.contains('qr-expanded')) $('btnToggleCalc')?.click();
@@ -1042,6 +1148,9 @@ export function exitQuickReviewMode() {
     clearNewRiskAlert();
     $('adds_wrapper')?.classList.remove('qr-expanded');
     setBloodsOverlay(false);
+    // Nothing recomputes on the way out, and the chips belong to Quick Review, so they are
+    // taken off here rather than left for the next compute pass to notice.
+    renderQuickChips({});
     restoreFromQuickGrid();
     document.querySelector('.device-add-group')?.classList.remove('show-all');
     $('btnDeviceMore')?.setAttribute('aria-expanded', 'false');

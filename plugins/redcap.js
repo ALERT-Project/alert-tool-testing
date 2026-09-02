@@ -19,8 +19,13 @@ function openRedcapAccelerator() {
     // --- 1. GATHER DATA ---
     
     // A. Role (CNS vs CN)
-    var roleVal = document.querySelector('input[name="clinicianRole"]:checked')?.value || "ALERT CNS";
-    var teamCode = (roleVal === "ALERT CN") ? "2" : "1"; // 1=CNS, 2=CN
+    // ALERT only. An ICU reviewer has no honest alert_team code, so the button that gets here
+    // is hidden while the team is ICU - this is the same rule stated where it is acted on, in
+    // case the button is ever reached another way.
+    var teamName = document.querySelector('input[name="reviewTeam"]:checked')?.value || "ALERT";
+    if (teamName === "ICU") return;
+    var gradeVal = document.querySelector('input[name="clinicianGrade"]:checked')?.value || "CNS";
+    var teamCode = (gradeVal === "CN") ? "2" : "1"; // 1=CNS, 2=CN
 
     // B. Score
     var score = document.getElementById('adds').value || "0";

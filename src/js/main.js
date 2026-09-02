@@ -17,7 +17,7 @@ import {
 import { computeAll } from './logic.js';
 import { generateSummary, generateHandoverLine } from './summary.js';
 import {
-    checkBloodRanges, updateWardOptions, updateReviewTypeVisibility, updateWardOtherVisibility,
+    checkBloodRanges, updateWardOptions, updateReviewTypeVisibility, updateReviewerRoleVisibility, updateWardOtherVisibility,
     createDeviceEntry, updateDevicesSectionVisibility, toggleOxyFields, toggleInfusionsBox,
     handleUnknownBLODate, showClearDataModal, hideClearDataModal, syncComorbsToPMH, clearData,
     enableQuickReviewMode, exitQuickReviewMode, showQuickReviewPrompt, openMobileNav, closeMobileNav,
@@ -1125,7 +1125,13 @@ function initialize() {
 
     // Chart vs physical decides both the DMR heading and the CAT 3 discharge criteria.
     document.querySelectorAll('input[name="reviewModeType"]').forEach(r => r.addEventListener('change', compute));
-    document.querySelectorAll('input[name="clinicianRole"]').forEach(r => r.addEventListener('change', compute));
+    document.querySelectorAll('input[name="clinicianGrade"]').forEach(r => r.addEventListener('change', compute));
+    // The team decides which grades exist and whether REDCap applies, so it re-runs the role
+    // rules before computing rather than only recording a value.
+    document.querySelectorAll('input[name="reviewTeam"]').forEach(r => r.addEventListener('change', () => {
+        updateReviewerRoleVisibility();
+        compute();
+    }));
 
     document.querySelectorAll('input[name="reviewType"]').forEach(r => r.addEventListener('change', () => {
         updateWardOptions();

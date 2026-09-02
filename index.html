@@ -251,11 +251,30 @@
                     </div>
                 </div>
 
+                <!-- Pre-Stepdown only: an ICU CNS or CNC sometimes reviews a patient of
+                     concern before they leave the unit. Post-Stepdown is always ALERT, so the
+                     toggle is hidden and forced back there on the way out - an ICU team left
+                     selected on a post review would put a team in the note that never saw the
+                     patient. ICU reviews are not ALERT activity, so the REDCap button goes
+                     with it: alert_team has no code that would be true of an ICU reviewer. -->
+                <div class="rs-field" id="reviewTeamWrapper" style="display:none;">
+                    <label>Reviewing Team</label>
+                    <div class="radio-segmented-group">
+                        <label><input type="radio" name="reviewTeam" value="ALERT" checked> ALERT</label>
+                        <label><input type="radio" name="reviewTeam" value="ICU"> ICU</label>
+                    </div>
+                </div>
+
+                <!-- Grades follow the team: ALERT is CNS or CN, ICU is CNS or CNC. data-team
+                     lists which teams each grade exists in, so no combination can be recorded
+                     that nobody holds. The two halves are joined into "<team> <grade>" in
+                     state.js - the note and the handover still read one role string. -->
                 <div class="rs-field">
                     <label>Clinician Role</label>
-                    <div class="radio-segmented-group">
-                        <label><input type="radio" name="clinicianRole" value="ALERT CNS" checked> CNS</label>
-                        <label><input type="radio" name="clinicianRole" value="ALERT CN"> CN</label>
+                    <div class="radio-segmented-group" id="clinicianGradeToggle">
+                        <label data-team="ALERT ICU"><input type="radio" name="clinicianGrade" value="CNS" checked> CNS</label>
+                        <label data-team="ALERT"><input type="radio" name="clinicianGrade" value="CN"> CN</label>
+                        <label data-team="ICU"><input type="radio" name="clinicianGrade" value="CNC"> CNC</label>
                     </div>
                 </div>
 
@@ -420,7 +439,7 @@
                     <!-- Same overlay, same problem: shown only while the calculator floats. -->
                     <button type="button" class="qr-overlay-close" data-qr-close aria-label="Close calculator">&times;</button>
                     <div class="gate-trigger-area">
-                        <div class="question-label">📊 ADDS Score <span id="prev_adds" class="prev-datum"></span></div>
+                        <div class="question-label">📊 ADDS Score <span id="qrChipAdds" class="qr-chip"></span><span id="prev_adds" class="prev-datum"></span></div>
                         <div>
                             <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
                                 <input id="adds" type="number" min="0" max="20"
@@ -1681,7 +1700,7 @@
                  Closing it used to mean finding the "Details (close)" button again, which
                  scrolls out of sight as soon as you move down the bloods grid. -->
             <button type="button" class="qr-overlay-close" data-qr-close aria-label="Close bloods">&times;</button>
-            <button type="button" class="accordion" aria-expanded="false" aria-controls="panel_bloods">🩸 Bloods <span class="icon"
+            <button type="button" class="accordion" aria-expanded="false" aria-controls="panel_bloods">🩸 Bloods <span id="qrChipBloods" class="qr-chip"></span><span class="icon"
                     aria-hidden="true"></span></button>
             <div id="bloods_quick_controls" style="display:none;">
                 <div class="segmented-group" id="seg_bloods_status">
@@ -1865,7 +1884,7 @@
 
         <div class="accordion-wrapper" id="section-devices" data-accordion-id="devices" style="margin-top:20px;">
             <button type="button" class="accordion" aria-expanded="false" aria-controls="panel_devices">🔧 Lines, Drains & Wounds
-                <span class="icon" aria-hidden="true"></span></button>
+                <span id="qrChipDevices" class="qr-chip"></span><span class="icon" aria-hidden="true"></span></button>
             <div class="panel" id="panel_devices">
                 <div id="devices-container" style="width:100%; box-sizing:border-box;"></div>
 

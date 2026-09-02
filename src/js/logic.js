@@ -13,7 +13,7 @@ import {
     addActiveIssue, maybeToastNewRisk, reconcileAutoIssues, renderScrapedIssuesList, getUnreviewedScrapedCount, getScoringListRisks, getDeletedRiskKeys} from './state.js';
 import {
     updateSidebarRiskBadges, maybeOfferQuickReview, refreshCategorySelect, showNewRiskAlert,
-    updateAgeMitigationUI, updateLosMitigationUI
+    updateAgeMitigationUI, updateLosMitigationUI, renderQuickChips
 } from './ui.js';
 import { setNotice, clearNotice, NOTICE_PRIORITY } from './notices.js';
 import { applyTrendArrows } from './trends.js';
@@ -302,6 +302,7 @@ function renderQuickReviewDecision(s, result) {
 
 function renderDerivedDisplays(s, result) {
     renderQuickReviewDecision(s, result);
+    renderQuickChips(s);
 
     // Driven from here rather than only from the debounced compute() in main.js: the segmented
     // buttons call computeAll() directly, so a mitigator whose visibility depends on a gate -

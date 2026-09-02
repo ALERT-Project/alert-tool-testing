@@ -191,6 +191,26 @@
     aptt: "APTT",
     bsl: "BSL"
   };
+  var NOTE_BLOOD_LABELS = {
+    lac_review: "Lac",
+    hb: "Hb",
+    wcc: "WCC",
+    crp: "CRP",
+    cr_review: "Cr",
+    egfr: "eGFR",
+    k: "K",
+    na: "Na",
+    mg: "Mg",
+    phos: "PO4",
+    plts: "Plts",
+    alb: "Alb",
+    neut: "Neut",
+    lymph: "Lymph",
+    bili: "Bili",
+    alt: "ALT",
+    inr: "INR",
+    aptt: "APTT"
+  };
   var normalRanges = {
     wcc: { low: 4, high: 11 },
     crp: { low: 0, high: 5 },
@@ -1308,6 +1328,7 @@
   }
   function renderDerivedDisplays(s, result) {
     renderQuickReviewDecision(s, result);
+    renderQuickChips(s);
     updateAgeMitigationUI();
     updateLosMitigationUI();
     const pmhSubtitle = $("pmh_subtitle");
@@ -1507,6 +1528,35 @@
       const c = $("chk_discharge_alert");
       if (c) c.checked = false;
     }
+    updateReviewerRoleVisibility();
+  }
+  function updateReviewerRoleVisibility() {
+    const type = document.querySelector('input[name="reviewType"]:checked')?.value || "post";
+    const isPre = type === "pre";
+    const teamWrapper = $("reviewTeamWrapper");
+    if (teamWrapper) teamWrapper.style.display = isPre ? "" : "none";
+    if (!isPre) {
+      const alertTeam = document.querySelector('input[name="reviewTeam"][value="ALERT"]');
+      if (alertTeam) alertTeam.checked = true;
+    }
+    const team = document.querySelector('input[name="reviewTeam"]:checked')?.value || "ALERT";
+    const grades = document.querySelectorAll("#clinicianGradeToggle label[data-team]");
+    let lastVisible = null;
+    grades.forEach((label) => {
+      const available = label.dataset.team.split(" ").includes(team);
+      label.hidden = !available;
+      label.classList.remove("rsg-edge");
+      if (available) lastVisible = label;
+      const radio = label.querySelector('input[type="radio"]');
+      if (!available && radio?.checked) radio.checked = false;
+    });
+    if (lastVisible) lastVisible.classList.add("rsg-edge");
+    if (!document.querySelector('input[name="clinicianGrade"]:checked')) {
+      const cns = document.querySelector('input[name="clinicianGrade"][value="CNS"]');
+      if (cns) cns.checked = true;
+    }
+    const redcap = $("btnRedcap");
+    if (redcap) redcap.style.display = team === "ICU" ? "none" : "";
   }
   function updateWardOtherVisibility() {
     const w = $("ptWardOtherWrapper");
@@ -2092,6 +2142,34 @@
     addsCalcObserver.observe(container, { attributes: true, attributeFilter: ["style"] });
     sync();
   }
+  function setChip(id, text) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = text || "";
+    if (text) el.setAttribute("data-filled", "true");
+    else el.removeAttribute("data-filled");
+  }
+  function renderQuickChips(s) {
+    if (!isQuickReviewMode) {
+      ["qrChipAdds", "qrChipBloods", "qrChipDevices"].forEach((id) => setChip(id, ""));
+      return;
+    }
+    const adds = (s.adds ?? "").toString().trim();
+    const isMods = $("addsManual")?.value === "true";
+    setChip("qrChipAdds", adds ? `\u2713 ${isMods ? "MODS" : "ADDS"} ${adds}` : "");
+    if (s.chk_bloods_nil_sig || s.bloods_status === "nil_sig") {
+      setChip("qrChipBloods", "\u2713 Nil significant");
+    } else if (s.bloods_status === "improving") {
+      setChip("qrChipBloods", "\u2713 Improving");
+    } else if (s.bloods_status === "not_checked") {
+      setChip("qrChipBloods", "\u2713 Not checked");
+    } else {
+      const n = Object.keys(NOTE_BLOOD_LABELS).filter((k) => s[`bl_${k}`]).length;
+      setChip("qrChipBloods", n ? `\u2713 ${n} result${n === 1 ? "" : "s"} entered` : "");
+    }
+    const lines = document.querySelectorAll("#devices-container .device-entry").length;
+    setChip("qrChipDevices", lines ? `\u2713 ${lines} recorded` : "");
+  }
   function closeQuickOverlays() {
     const wrapper = $("adds_wrapper");
     if (wrapper?.classList.contains("qr-expanded")) $("btnToggleCalc")?.click();
@@ -2235,6 +2313,7 @@
     clearNewRiskAlert();
     $("adds_wrapper")?.classList.remove("qr-expanded");
     setBloodsOverlay(false);
+    renderQuickChips({});
     restoreFromQuickGrid();
     document.querySelector(".device-add-group")?.classList.remove("show-all");
     $("btnDeviceMore")?.setAttribute("aria-expanded", "false");
@@ -2693,7 +2772,9 @@
       state[id] = group?.querySelector(".select-btn.active")?.dataset.value || "";
     });
     state["reviewType"] = document.querySelector('input[name="reviewType"]:checked')?.value || "post";
-    state["clinicianRole"] = document.querySelector('input[name="clinicianRole"]:checked')?.value || "ALERT CNS";
+    const reviewTeam = document.querySelector('input[name="reviewTeam"]:checked')?.value || "ALERT";
+    const clinicianGrade = document.querySelector('input[name="clinicianGrade"]:checked')?.value || "CNS";
+    state["clinicianRole"] = `${reviewTeam} ${clinicianGrade}`;
     state["reviewModeType"] = document.querySelector('input[name="reviewModeType"]:checked')?.value || "";
     state.activeIssues = activeIssues;
     ["chk_medical_rounding", "chk_discharge_alert", "chk_continue_alert", "chk_use_mods", "chk_bloods_nil_sig", "chk_discharge_pending_bloods"].forEach((id) => {
@@ -2787,8 +2868,12 @@
       updateReviewTypeVisibility();
     }
     if (state["clinicianRole"]) {
-      const r = document.querySelector(`input[name="clinicianRole"][value="${state["clinicianRole"]}"]`);
-      if (r) r.checked = true;
+      const [team, grade] = state["clinicianRole"].split(" ");
+      const t = document.querySelector(`input[name="reviewTeam"][value="${team}"]`);
+      if (t) t.checked = true;
+      const g = document.querySelector(`input[name="clinicianGrade"][value="${grade}"]`);
+      if (g) g.checked = true;
+      updateReviewerRoleVisibility();
     }
     if (state["reviewModeType"]) {
       const r = document.querySelector(`input[name="reviewModeType"][value="${state["reviewModeType"]}"]`);
@@ -3037,7 +3122,7 @@
     if (s.vte_prophylaxis_note) addLine(`VTE Prophylaxis: ${s.vte_prophylaxis_note}`);
     if (s.infusions_note) addLine(`Infusions: ${s.infusions_note}`);
     pushBlank();
-    const blMap = { "lac_review": "Lac", "hb": "Hb", "wcc": "WCC", "crp": "CRP", "cr_review": "Cr", "egfr": "eGFR", "k": "K", "na": "Na", "mg": "Mg", "phos": "PO4", "plts": "Plts", "alb": "Alb", "neut": "Neut", "lymph": "Lymph", "bili": "Bili", "alt": "ALT", "inr": "INR", "aptt": "APTT" };
+    const blMap = NOTE_BLOOD_LABELS;
     if (s.chk_bloods_nil_sig || s.bloods_status === "nil_sig") {
       addLine("Bloods: Checked, nil significant");
     } else if (s.bloods_status === "improving") {
@@ -4170,7 +4255,11 @@
       compute();
     });
     document.querySelectorAll('input[name="reviewModeType"]').forEach((r) => r.addEventListener("change", compute));
-    document.querySelectorAll('input[name="clinicianRole"]').forEach((r) => r.addEventListener("change", compute));
+    document.querySelectorAll('input[name="clinicianGrade"]').forEach((r) => r.addEventListener("change", compute));
+    document.querySelectorAll('input[name="reviewTeam"]').forEach((r) => r.addEventListener("change", () => {
+      updateReviewerRoleVisibility();
+      compute();
+    }));
     document.querySelectorAll('input[name="reviewType"]').forEach((r) => r.addEventListener("change", () => {
       updateWardOptions();
       toggleInfusionsBox();

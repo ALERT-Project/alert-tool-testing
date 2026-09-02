@@ -26,6 +26,17 @@ export const BLOOD_LABELS = {
     aptt: 'APTT', bsl: 'BSL'
 };
 
+// The bloods the DMR note actually writes down, in the order it writes them. Not the same set
+// as BLOOD_LABELS, which names every result the rules can read and includes BSL - a value the
+// note has never printed. Lifted out of summary.js so the Quick Review chip counts from the
+// note's own list: a chip that says "6 results entered" beside a note that prints five is
+// worse than no chip, and one shared map is the only way the two cannot drift.
+export const NOTE_BLOOD_LABELS = {
+    lac_review: 'Lac', hb: 'Hb', wcc: 'WCC', crp: 'CRP', cr_review: 'Cr', egfr: 'eGFR',
+    k: 'K', na: 'Na', mg: 'Mg', phos: 'PO4', plts: 'Plts', alb: 'Alb', neut: 'Neut',
+    lymph: 'Lymph', bili: 'Bili', alt: 'ALT', inr: 'INR', aptt: 'APTT'
+};
+
 export const normalRanges = {
     wcc: { low: 4, high: 11 },
     crp: { low: 0, high: 5 },

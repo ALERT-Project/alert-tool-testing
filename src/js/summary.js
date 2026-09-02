@@ -6,7 +6,7 @@
    ========================================= */
 
 import { $, nowTimeStr, todayDateStr, formatDateDDMMYYYY, num, toDmrSafeText, wardLabel } from './utils.js';
-import { comorbMap } from './config.js';
+import { comorbMap, NOTE_BLOOD_LABELS } from './config.js';
 
 export function generateSummary(s, cat, wardTimeTxt, red, amber, suppressed, activeComorbsKeys, lists = {}) {
 
@@ -265,7 +265,7 @@ export function generateSummary(s, cat, wardTimeTxt, red, amber, suppressed, act
     // CRP was missing from this map entirely, so however high it was it never reached the note -
     // it could open the infection gate and be quoted inside "Infection risk - CRP 250", but the
     // value itself was never written down. It sits beside WCC, where it is read.
-    const blMap = { 'lac_review': 'Lac', 'hb': 'Hb', 'wcc': 'WCC', 'crp': 'CRP', 'cr_review': 'Cr', 'egfr': 'eGFR', 'k': 'K', 'na': 'Na', 'mg': 'Mg', 'phos': 'PO4', 'plts': 'Plts', 'alb': 'Alb', 'neut': 'Neut', 'lymph': 'Lymph', 'bili': 'Bili', 'alt': 'ALT', 'inr': 'INR', 'aptt': 'APTT' };
+    const blMap = NOTE_BLOOD_LABELS;
     if (s.chk_bloods_nil_sig || s.bloods_status === 'nil_sig') {
         addLine('Bloods: Checked, nil significant');
     } else if (s.bloods_status === 'improving') {
