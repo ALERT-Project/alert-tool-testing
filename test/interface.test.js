@@ -2432,3 +2432,59 @@ test('a risk carried into a Full Review is on screen before it is in the note', 
     assert.match(document.getElementById('summary').value, /- Difficult IV access.*\(carried 2\)/);
     close();
 });
+
+// --- Anticoagulation and VTE, one field ----------------------------------------------------
+//
+// They are mutually exclusive in practice - a patient on warfarin is not also on prophylactic
+// enoxaparin - so the second box was empty on every review and read as an unanswered question.
+// Neither ever drove a rule. What has to survive the merge is the round trip: notes written
+// before it say "Anticoagulation:" or "VTE Prophylaxis:", and a patient reviewed the day before
+// this shipped must not lose the line at changeover.
+
+test('anticoagulation and VTE are one field, and the note prints one line', async () => {
+    const { window, document, close } = await loadTool();
+    assert.equal(document.getElementById('vte_prophylaxis_note'), null, 'the second box is gone');
+
+    type(window, 'ptName', 'ABC');
+    type(window, 'anticoag_note', 'Enoxaparin 40mg daily');
+    type(window, 'infusions_note', 'Nil');
+    await tick(window, 600);
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+
+    const note = document.getElementById('summary').value;
+    assert.match(note, /^Anticoagulation \/ VTE: Enoxaparin 40mg daily$/m);
+    assert.ok(!/^VTE Prophylaxis:/m.test(note), 'and only one line for it');
+    close();
+});
+
+test('an older note carrying both lines brings both back into the one field', async () => {
+    const { window, document, close } = await loadTool();
+    click(window, '#btnOpenImport');
+    document.getElementById('importText').value = [
+        'ALERT CNS post ICU review - Physical review',
+        'Patient: ABC | URN: ...123',
+        '',
+        'Anticoagulation: Warfarin, INR 2.4',
+        'VTE Prophylaxis: TEDs',
+        'Infusions: Nil',
+        '',
+        'IDENTIFIED ICU READMISSION RISK FACTORS:',
+        '- None identified',
+        '',
+        'PLAN:',
+        '- ALERT nursing post ICU reviews continue.'
+    ].join('\n');
+    click(window, '#runImport');
+    await tick(window, 900);
+
+    const prev = document.getElementById('prev_anticoag').textContent;
+    assert.match(prev, /Warfarin, INR 2\.4/);
+    assert.match(prev, /TEDs/, 'the prophylaxis line is not dropped just because its box has gone');
+
+    // And the sections below the medication block are still not read back as devices.
+    assert.ok(![...document.querySelectorAll('#devices-container .device-entry')]
+        .some(d => /VTE|Anticoag/i.test(d.textContent)),
+        'a labelled medication line never becomes an Other Device');
+    close();
+});

@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Lines that are assessment answers, not devices. Each is read into its own field by the
     // passes above, so it must never also become a device entry.
-    const NON_DEVICE_LINE = /^(Mobility|Diet|Nutrition|Sleep|Psychological issues|Post ICU Syndrome|Bowels|Anticoagulation|VTE Prophylaxis|Infusions|Allergies|GOC|PICS Assessment|Weight|Age|SpO2 target|ADDS|MODS)\s*:/i;
+    const NON_DEVICE_LINE = /^(Mobility|Diet|Nutrition|Sleep|Psychological issues|Post ICU Syndrome|Bowels|Anticoagulation(?:\s*\/\s*VTE)?|VTE Prophylaxis|Infusions|Allergies|GOC|PICS Assessment|Weight|Age|SpO2 target|ADDS|MODS)\s*:/i;
 
     function processDMR(text) {
         // --- 0. RESET ---
@@ -410,11 +410,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bowelMatch) setPrev('prev_bowels', bowelMatch[1]);
 
             // --- Medication / treatment fields (prev datum, not carry-forward) ---
-            const anticoagMatch = text.match(/Anticoagulation:\s*(.*)/i);
-            if (anticoagMatch) setPrev('prev_anticoag', anticoagMatch[1]);
-
-            const vteMatch = text.match(/VTE Prophylaxis:\s*(.*)/i);
-            if (vteMatch) setPrev('prev_vte', vteMatch[1]);
+            // One field now, but three possible headings in the wild: notes written since the
+            // merge say "Anticoagulation / VTE:", and every note written before it says
+            // "Anticoagulation:" or "VTE Prophylaxis:" or both. All of them land in the one
+            // field - a patient reviewed the day before this shipped must not lose the line at
+            // changeover, and a note holding both gets both, joined rather than one overwriting
+            // the other.
+            const anticoagParts = [];
+            const mergedMatch = text.match(/Anticoagulation\s*\/\s*VTE:\s*(.*)/i);
+            if (mergedMatch) anticoagParts.push(mergedMatch[1].trim());
+            else {
+                const anticoagMatch = text.match(/Anticoagulation:\s*(.*)/i);
+                if (anticoagMatch) anticoagParts.push(anticoagMatch[1].trim());
+                const vteMatch = text.match(/VTE Prophylaxis:\s*(.*)/i);
+                if (vteMatch) anticoagParts.push(vteMatch[1].trim());
+            }
+            if (anticoagParts.filter(Boolean).length) {
+                setPrev('prev_anticoag', anticoagParts.filter(Boolean).join('; '));
+            }
 
             const infusionsMatch = text.match(/Infusions:\s*(.*)/i);
             if (infusionsMatch) setPrev('prev_infusions', infusionsMatch[1]);

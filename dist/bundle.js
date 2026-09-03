@@ -327,7 +327,6 @@
     "bloods_date",
     "bloods_time",
     "anticoag_note",
-    "vte_prophylaxis_note",
     "elec_replace_note",
     "goc_note",
     "allergies_note",
@@ -1986,7 +1985,6 @@
       "#pressor_recent_other_note_wrapper",
       "#dialysis_type_wrapper",
       "#anticoag_note_wrapper",
-      "#vte_prophylaxis_note_wrapper",
       "#pics_wrapper",
       "#sleep_quality_wrapper",
       "#neuro_psych_wrapper",
@@ -2878,6 +2876,12 @@
       const el = $(id);
       if (el && state[id] !== void 0) el.value = state[id];
     });
+    if (state["vte_prophylaxis_note"]) {
+      const el = $("anticoag_note");
+      if (el && !el.value.includes(state["vte_prophylaxis_note"])) {
+        el.value = [el.value, state["vte_prophylaxis_note"]].filter(Boolean).join("; ");
+      }
+    }
     segmentedInputs.forEach((id) => {
       const group = $(`seg_${id}`);
       if (!group) return;
@@ -2908,7 +2912,6 @@
         if (id === "pressor_recent_other") $("pressor_recent_other_note_wrapper").style.display = state[id] ? "block" : "none";
         if (id === "pressor_current_other") $("pressor_current_other_note_wrapper").style.display = state[id] ? "block" : "none";
         if (id === "anticoag_active") $("anticoag_note_wrapper").style.display = state[id] ? "block" : "none";
-        if (id === "vte_prophylaxis_active") $("vte_prophylaxis_note_wrapper").style.display = state[id] ? "block" : "none";
         if (id === "renal_dialysis") $("dialysis_type_wrapper").style.display = state[id] ? "block" : "none";
       }
     });
@@ -3197,8 +3200,7 @@
     if (bowelTxt) addLine(`Bowels: ${bowelTxt}`);
     if (s.nutrition_adequate === false) addLine(`Nutrition: Inadequate${s.nutrition_context_note ? ` - ${s.nutrition_context_note}` : ""}`);
     else if (s.nutrition_adequate === true) addLine(`Nutrition: Adequate`);
-    if (s.anticoag_note) addLine(`Anticoagulation: ${s.anticoag_note}`);
-    if (s.vte_prophylaxis_note) addLine(`VTE Prophylaxis: ${s.vte_prophylaxis_note}`);
+    if (s.anticoag_note) addLine(`Anticoagulation / VTE: ${s.anticoag_note}`);
     if (s.infusions_note) addLine(`Infusions: ${s.infusions_note}`);
     pushBlank();
     const blMap = NOTE_BLOOD_LABELS;

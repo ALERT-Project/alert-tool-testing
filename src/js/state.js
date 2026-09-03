@@ -498,6 +498,17 @@ export function restoreState(state) {
 
     staticInputs.forEach(id => { const el = $(id); if (el && state[id] !== undefined) el.value = state[id]; });
 
+    // A session saved before Anticoagulation and VTE Prophylaxis became one field still holds
+    // the second value under its old key, and vte_prophylaxis_note is no longer a form input,
+    // so nothing above would put it back. A reviewer part-way through a patient when this
+    // shipped should not lose what they typed to a refresh.
+    if (state['vte_prophylaxis_note']) {
+        const el = $('anticoag_note');
+        if (el && !el.value.includes(state['vte_prophylaxis_note'])) {
+            el.value = [el.value, state['vte_prophylaxis_note']].filter(Boolean).join('; ');
+        }
+    }
+
     segmentedInputs.forEach(id => {
         const group = $(`seg_${id}`);
         if (!group) return;
@@ -524,7 +535,6 @@ export function restoreState(state) {
             if (id === 'pressor_recent_other') $('pressor_recent_other_note_wrapper').style.display = state[id] ? 'block' : 'none';
             if (id === 'pressor_current_other') $('pressor_current_other_note_wrapper').style.display = state[id] ? 'block' : 'none';
             if (id === 'anticoag_active') $('anticoag_note_wrapper').style.display = state[id] ? 'block' : 'none';
-            if (id === 'vte_prophylaxis_active') $('vte_prophylaxis_note_wrapper').style.display = state[id] ? 'block' : 'none';
             if (id === 'renal_dialysis') $('dialysis_type_wrapper').style.display = state[id] ? 'block' : 'none';
         }
     });

@@ -256,8 +256,9 @@ export function generateSummary(s, cat, wardTimeTxt, red, amber, suppressed, act
     else if (s.nutrition_adequate === true) addLine(`Nutrition: Adequate`);
 
 
-    if (s.anticoag_note) addLine(`Anticoagulation: ${s.anticoag_note}`);
-    if (s.vte_prophylaxis_note) addLine(`VTE Prophylaxis: ${s.vte_prophylaxis_note}`);
+    // One line where there were two. The heading keeps both words so a reader who is looking
+    // for the prophylaxis still finds it, and so the importer has a name to match on.
+    if (s.anticoag_note) addLine(`Anticoagulation / VTE: ${s.anticoag_note}`);
     if (s.infusions_note) addLine(`Infusions: ${s.infusions_note}`);
 
     pushBlank();

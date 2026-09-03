@@ -1645,15 +1645,19 @@
 
                     <div class="col-12" style="margin-top:12px;">
                         <div class="grid" style="row-gap:8px;">
+                            <!-- One box, not two. Therapeutic anticoagulation and VTE prophylaxis
+                                 are mutually exclusive in practice - a patient on warfarin is not
+                                 also on prophylactic enoxaparin - so the second box was empty on
+                                 every review and read as a question nobody had answered. Neither
+                                 field ever drove a rule; both were free text on their way to the
+                                 note, so what merged is the label, not any logic. The importer
+                                 still reads "VTE Prophylaxis:" out of notes written before this
+                                 and brings it back into this field. -->
                             <div class="col-6">
-                                <div class="input-box"><label>Anticoagulation <span id="prev_anticoag" class="prev-datum"></span></label><input id="anticoag_note"
+                                <div class="input-box"><label>Anticoagulation / VTE <span id="prev_anticoag" class="prev-datum"></span></label><input id="anticoag_note"
                                         type="text" /></div>
                             </div>
-                            <div class="col-6">
-                                <div class="input-box"><label>VTE Prophylaxis <span id="prev_vte" class="prev-datum"></span></label><input id="vte_prophylaxis_note"
-                                        type="text" /></div>
-                            </div>
-                            <div class="col-12" id="infusions_wrapper">
+                            <div class="col-6" id="infusions_wrapper">
                                 <div class="input-box"><label>Infusions <span id="prev_infusions" class="prev-datum"></span></label><input id="infusions_note" type="text" />
                                 </div>
                             </div>

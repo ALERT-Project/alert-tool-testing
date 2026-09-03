@@ -81,7 +81,7 @@ export const staticInputs = [
     'bl_wcc', 'bl_crp', 'bl_neut', 'bl_lymph', 'bl_hb', 'bl_plts', 'bl_k', 'bl_na',
     'bl_cr_review', 'bl_mg', 'bl_alb', 'bl_lac_review', 'bl_phos',
     'bl_bili', 'bl_alt', 'bl_inr', 'bl_aptt', 'bl_egfr', 'inr_target', 'aptt_target',
-    'bloods_date', 'bloods_time', 'anticoag_note', 'vte_prophylaxis_note',
+    'bloods_date', 'bloods_time', 'anticoag_note',
     'elec_replace_note', 'goc_note', 'allergies_note', 'pics_note', 'context_other_note', 'pmh_note',
     'adds', 'wcc', 'crp', 'neut', 'lymph', 'infusions_note',
     'dyspneaConcern', 'dyspneaConcern_note', 'renal_note', 'infection_note',
