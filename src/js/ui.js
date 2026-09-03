@@ -133,6 +133,19 @@ export function updateIcuRoundingPrompt() {
     el.style.display = (team === 'ICU' && type === 'pre' && on) ? 'block' : 'none';
 }
 
+// The rhythm follow-up. Only asked while the rhythm actually reads irregular, and cleared when
+// it stops - otherwise a Yes recorded on an irregular rhythm would go on scoring after the
+// clinician corrected the field to regular, from a control no longer on screen to correct it in.
+export function updateRhythmNewVisibility() {
+    const wrapper = $('hr_rhythm_new_wrapper');
+    if (!wrapper) return;
+    const irregular = /irregular/i.test($('c_hr_rhythm')?.value || '');
+    wrapper.style.display = irregular ? 'block' : 'none';
+    if (!irregular) {
+        $('seg_c_hr_rhythm_new')?.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    }
+}
+
 export function updateWardOptions() {
     const type = document.querySelector('input[name="reviewType"]:checked')?.value || 'post';
     const sel = $('ptWard');

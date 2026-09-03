@@ -2327,3 +2327,42 @@ test('factors carried in from the last note are shown, not just printed', async 
         'carried once, printed once');
     close();
 });
+
+test('the rhythm follow-up appears only for an irregular rhythm, and clears when it stops', async () => {
+    const { window, document, close } = await loadTool();
+    const wrapper = document.getElementById('hr_rhythm_new_wrapper');
+    type(window, 'ptName', 'ABC');
+    await tick(window);
+    assert.equal(wrapper.style.display, 'none', 'nothing asked about a rhythm nobody has described');
+
+    type(window, 'c_hr_rhythm', 'Irregular');
+    await tick(window, 600);
+    assert.equal(wrapper.style.display, 'block');
+
+    click(window, '#seg_c_hr_rhythm_new .seg-btn[data-value="true"]');
+    await tick(window, 600);
+    assert.match(document.getElementById('amberFlagList').textContent, /New irregular rhythm/);
+
+    // Correcting the rhythm has to take the answer with it. Otherwise a Yes goes on scoring
+    // from a control that is no longer on screen to correct it in.
+    type(window, 'c_hr_rhythm', 'Regular');
+    await tick(window, 600);
+    assert.equal(wrapper.style.display, 'none');
+    assert.ok(!/New irregular rhythm/.test(document.getElementById('amberFlagList').textContent),
+        'and it stops counting');
+    close();
+});
+
+test('typing increased WOB opens the respiratory gate and says why', async () => {
+    const { window, document, close } = await loadTool();
+    type(window, 'ptName', 'ABC');
+    click(window, '.quick-select[data-target="b_wob"][data-value="Increased"]');
+    await tick(window, 900);
+
+    assert.ok(document.querySelector('#seg_resp_concern .seg-btn[data-value="true"]').classList.contains('active'),
+        'the gate opens, so the inference is visible and can be overruled');
+    assert.match(document.getElementById('amberFlagList').textContent,
+        /Respiratory concern - increased work of breathing/,
+        'and the risk carries the reason rather than firing bare');
+    close();
+});

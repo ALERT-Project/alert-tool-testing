@@ -602,6 +602,25 @@ function initialize() {
         }, 800));
     }
 
+    // Increased work of breathing with a normal respiratory rate is the picture a score is
+    // built to miss, and the WOB field recorded nothing at all until now. It opens the resp
+    // gate the way a weak cough does; rules.js reads the reason back out of the same field, so
+    // the note says "Respiratory concern - increased work of breathing" rather than firing bare.
+    const wobInput = $('b_wob');
+    if (wobInput) {
+        wobInput.addEventListener('input', debounce(() => {
+            const val = wobInput.value.toLowerCase();
+            if (/increas|labour|labor/.test(val)) {
+                const respSeg = $('seg_resp_concern');
+                const respYes = respSeg?.querySelector('.seg-btn[data-value="true"]');
+                if (respYes && !respYes.classList.contains('active')) {
+                    respYes.click();
+                    showToast('Auto-selected Resp Concern - increased WOB (B)', 1500);
+                }
+            }
+        }, 600));
+    }
+
     const coughInput = $('b_cough');
     if (coughInput) {
         coughInput.addEventListener('input', debounce(() => {

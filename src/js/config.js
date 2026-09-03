@@ -101,7 +101,9 @@ export const segmentedInputs = [
     'infection_downtrend', 'infection_downtrend_bloods',
     'sleep_quality', 'pain_control', 'neuro_psych', 'pics',
     'resp_dyspnea', 'resp_tachypnea', 'resp_rapid_wean', 'resp_poor_cough', 'resp_poor_swallow',
-    'age_mitigated', 'los_mitigated', 'frailty_known'
+    'age_mitigated', 'los_mitigated', 'frailty_known',
+    // Only asked when the rhythm reads irregular - see updateRhythmNewVisibility in ui.js.
+    'c_hr_rhythm_new'
 ];
 
 export const toggleInputs = [

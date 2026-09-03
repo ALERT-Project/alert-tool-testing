@@ -12,7 +12,7 @@ import {
     setQuickReviewBaselineCaptured,
     addActiveIssue, maybeToastNewRisk, reconcileAutoIssues, renderScrapedIssuesList, getUnreviewedScrapedCount, getScoringListRisks, getDeletedRiskKeys} from './state.js';
 import {
-    updateSidebarRiskBadges, maybeOfferQuickReview, refreshCategorySelect, showNewRiskAlert,
+    updateSidebarRiskBadges, maybeOfferQuickReview, refreshCategorySelect, showNewRiskAlert, updateRhythmNewVisibility,
     updateAgeMitigationUI, updateLosMitigationUI, renderQuickChips
 } from './ui.js';
 import { setNotice, clearNotice, NOTICE_PRIORITY } from './notices.js';
@@ -334,6 +334,7 @@ function renderQuickReviewDecision(s, result) {
 }
 
 function renderDerivedDisplays(s, result) {
+    updateRhythmNewVisibility();
     renderQuickReviewDecision(s, result);
     renderQuickChips(s);
 

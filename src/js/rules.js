@@ -287,6 +287,47 @@ export function evaluateRisks(s, ctx = {}) {
         }
     }
 
+    // --- A-E findings that are not numbers ---
+    //
+    // The panel has always held these answers and never scored them, so a patient could be
+    // recorded as thready and cool with a perfect ADDS and come out CAT 3. They are amber in
+    // their own right rather than through a gate: there is no clinical judgement left to make
+    // about a clinician who has written "thready pulses" - they have already made it, and
+    // routing it through a gate would only ask them the same question twice.
+    //
+    // Substring matching, because every one of these fields is free text with buttons that
+    // stack into it: c_perf legitimately holds "Warm, well perfused, Thready pulses" after two
+    // clicks. That means text typed to say the opposite ("no stridor") will fire, which is
+    // visible and correctable on screen; the alternative, silence, is neither.
+    const perf = (s.c_perf || '').toLowerCase();
+    if (perf.includes('thready')) add(amber, 'Thready pulses', 'c_perf_thready', 'amber');
+    if (perf.includes('poorly perfused')) add(amber, 'Cool, poorly perfused', 'c_perf_poor', 'amber');
+
+    // The buttons offer "<3 sec", "4 sec", "5 sec" and "6 sec", so a leading "<" is the whole
+    // difference between normal and delayed and has to survive the parse.
+    const crRaw = (s.c_cr || '').toLowerCase();
+    const crMatch = crRaw.match(/(<\s*)?(\d+)\s*s(?:ec)?/);
+    if (crRaw.includes('delayed') || crRaw.includes('prolonged') ||
+        (crMatch && !crMatch[1] && Number(crMatch[2]) >= 4)) {
+        const secs = crMatch && !crMatch[1] ? ` ${crMatch[2]}s` : '';
+        add(amber, `Delayed capillary refill${secs}`, 'c_cr_delayed', 'amber');
+    }
+
+    // A: the only quick-select offered is "Patent", so anything worth flagging arrives as
+    // typed text. Each is named separately - "airway compromise" would be the tool putting a
+    // word in the reviewer's mouth that they did not use.
+    const airway = (s.airway_a || '').toLowerCase();
+    if (airway.includes('stridor')) add(amber, 'Stridor', 'airway_stridor', 'amber');
+    if (airway.includes('noisy')) add(amber, 'Noisy breathing', 'airway_noisy', 'amber');
+    if (airway.includes('partial')) add(amber, 'Partial airway obstruction', 'airway_partial', 'amber');
+
+    // Irregular on its own says nothing: a ward full of post-cardiac patients is a ward full of
+    // chronic AF, and flagging every one of them is how a flag stops being read. So the tool
+    // asks whether it is new, and only a Yes scores.
+    if (/irregular/i.test(rhythm) && s.c_hr_rhythm_new === true) {
+        add(amber, 'New irregular rhythm', 'c_hr_rhythm_new', 'amber');
+    }
+
     // Temperature was being judged by two rules with two different thresholds, and neither
     // said so. 38.5 exactly fell through the febrile rule (it tested >) and came out amber via
     // the infection gate instead, which triggers above 38 - so the reader saw "Infection risk"
@@ -342,6 +383,10 @@ export function evaluateRisks(s, ctx = {}) {
             else if (dysp === 'mild') { parts.push('Dyspnea mild'); flagged.amber.push('dyspneaConcern'); }
             else if (!dysp) { parts.push('Dyspnea'); flagged.amber.push('seg_resp_dyspnea'); }
         }
+        // Increased work of breathing has no toggle of its own - it is read off the WOB field,
+        // which is where the clinician already wrote it. main.js opens this gate when they do,
+        // so the gate and the reason arrive together rather than the gate firing bare.
+        if (/increas|labour|labor/i.test(s.b_wob || '')) { parts.push('increased work of breathing'); flagged.amber.push('b_wob'); }
         if (s.resp_tachypnea === true) { parts.push('tachypnea >20bpm'); flagged.amber.push('seg_resp_tachypnea'); }
         if (s.resp_rapid_wean === true) { parts.push('rapid O2 wean within last 12h'); flagged.red.push('seg_resp_rapid_wean'); hasRed = true; }
         if (s.resp_poor_cough === true) { parts.push('poor cough effort'); flagged.amber.push('seg_resp_poor_cough'); }

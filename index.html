@@ -1322,6 +1322,19 @@
                                                 style="flex:1; font-size:var(--fs-hint);">Irr</button>
                                         </div>
                                         <input id="c_hr_rhythm" type="text" style="margin-top:2px;" />
+                                        <!-- Irregular on its own is not a finding: a ward of
+                                             post-cardiac patients is a ward of chronic AF, and
+                                             flagging every one of them is how a flag stops
+                                             being read. Only a Yes here scores. Shown only
+                                             while the rhythm reads irregular, and cleared when
+                                             it stops - see updateRhythmNewVisibility. -->
+                                        <div id="hr_rhythm_new_wrapper" style="display:none; margin-top:6px;">
+                                            <div class="question-label" style="font-size:var(--fs-hint) !important; color:var(--muted); margin-bottom:2px;">New?</div>
+                                            <div class="segmented-group" id="seg_c_hr_rhythm_new">
+                                                <button type="button" class="seg-btn" data-value="true" style="flex:1; font-size:var(--fs-hint);">Yes</button>
+                                                <button type="button" class="seg-btn" data-value="false" style="flex:1; font-size:var(--fs-hint);">No</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="col-3">

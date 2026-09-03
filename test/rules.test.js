@@ -404,3 +404,65 @@ test('the review clock is 24-hour, zero-padded, and never writes 24:00', () => {
         assert.match(at(h, 0), /^([01]\d|2[0-3]):[0-5]\d$/, `hour ${h} is in range`);
     }
 });
+
+// --- A-E findings that are not numbers ----------------------------------------------------
+//
+// The panel has always held these answers and never scored them, so a patient could be recorded
+// as thready and cool with a perfect ADDS and come out CAT 3.
+
+test('perfusion, cap refill and airway findings are amber in their own right', () => {
+    const at = (extra) => evaluate(extra);
+
+    assert.equal(at({}).cat.id, 'green', 'a blank A-E panel flags nothing');
+
+    const thready = at({ c_perf: 'Warm, well perfused, Thready pulses' });
+    assert.equal(thready.cat.id, 'amber');
+    assert.ok(thready.amber.includes('Thready pulses'),
+        'the buttons stack, so the finding has to be found inside whatever else is in the field');
+
+    assert.ok(at({ c_perf: 'Cool, poorly perfused' }).amber.includes('Cool, poorly perfused'));
+
+    // The buttons offer "<3 sec", "4 sec", "5 sec", "6 sec" - the leading "<" is the whole
+    // difference between a normal refill and a delayed one.
+    assert.equal(at({ c_cr: '<3 sec' }).cat.id, 'green', 'under three seconds is normal');
+    assert.ok(at({ c_cr: '4 sec' }).amber.includes('Delayed capillary refill 4s'));
+    assert.ok(at({ c_cr: '6 sec' }).amber.includes('Delayed capillary refill 6s'));
+    assert.ok(at({ c_cr: 'delayed' }).amber.includes('Delayed capillary refill'),
+        'and the word on its own counts, since this is a free-text field');
+
+    for (const [text, expected] of [['Stridor', 'Stridor'], ['noisy breathing', 'Noisy breathing'],
+                                    ['partial obstruction', 'Partial airway obstruction']]) {
+        assert.ok(at({ airway_a: `Patent, ${text}` }).amber.includes(expected), expected);
+    }
+});
+
+test('an irregular rhythm scores only once it is confirmed as new', () => {
+    const at = (extra) => evaluate(extra);
+
+    // A ward of post-cardiac patients is a ward of chronic AF. Flagging every one of them is
+    // how a flag stops being read, so the bare finding says nothing.
+    assert.equal(at({ c_hr_rhythm: 'Irregular' }).cat.id, 'green', 'irregular alone is not a finding');
+    assert.equal(at({ c_hr_rhythm: 'Irregular', c_hr_rhythm_new: false }).cat.id, 'green',
+        'and a known chronic AF stays quiet');
+
+    const isNew = at({ c_hr_rhythm: 'Irregular', c_hr_rhythm_new: true });
+    assert.equal(isNew.cat.id, 'amber');
+    assert.ok(isNew.amber.includes('New irregular rhythm'));
+
+    // The answer cannot outlive the finding it belongs to - a Yes recorded and then corrected
+    // to regular must stop scoring, not go on from a control that is no longer on screen.
+    assert.equal(at({ c_hr_rhythm: 'Regular', c_hr_rhythm_new: true }).cat.id, 'green');
+});
+
+test('increased work of breathing is named inside the respiratory concern, not left bare', () => {
+    // The gate on its own says "Respiratory concern" and nothing else. Reading the reason back
+    // out of the WOB field is what makes the note worth reading.
+    const r = evaluate({ resp_concern: true, b_wob: 'Increased' });
+    assert.equal(r.cat.id, 'amber');
+    assert.ok(r.amber.some(t => /Respiratory concern - increased work of breathing/.test(t)),
+        `expected the reason in the risk, got: ${r.amber.join(' | ')}`);
+
+    // Without the gate open the field alone does nothing - main.js opens it when the clinician
+    // types, and this is the rule half of that pair.
+    assert.equal(evaluate({ b_wob: 'Increased' }).cat.id, 'green');
+});

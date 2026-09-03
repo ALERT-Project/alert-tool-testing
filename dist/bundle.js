@@ -397,7 +397,9 @@
     "resp_poor_swallow",
     "age_mitigated",
     "los_mitigated",
-    "frailty_known"
+    "frailty_known",
+    // Only asked when the rhythm reads irregular - see updateRhythmNewVisibility in ui.js.
+    "c_hr_rhythm_new"
   ];
   var toggleInputs = [
     "comorb_copd",
@@ -730,6 +732,22 @@
         addCheck(`SpO2 ${spo2}% - above target 88-92%, review oxygen`, "chk_spo2");
       }
     }
+    const perf = (s.c_perf || "").toLowerCase();
+    if (perf.includes("thready")) add(amber, "Thready pulses", "c_perf_thready", "amber");
+    if (perf.includes("poorly perfused")) add(amber, "Cool, poorly perfused", "c_perf_poor", "amber");
+    const crRaw = (s.c_cr || "").toLowerCase();
+    const crMatch = crRaw.match(/(<\s*)?(\d+)\s*s(?:ec)?/);
+    if (crRaw.includes("delayed") || crRaw.includes("prolonged") || crMatch && !crMatch[1] && Number(crMatch[2]) >= 4) {
+      const secs = crMatch && !crMatch[1] ? ` ${crMatch[2]}s` : "";
+      add(amber, `Delayed capillary refill${secs}`, "c_cr_delayed", "amber");
+    }
+    const airway = (s.airway_a || "").toLowerCase();
+    if (airway.includes("stridor")) add(amber, "Stridor", "airway_stridor", "amber");
+    if (airway.includes("noisy")) add(amber, "Noisy breathing", "airway_noisy", "amber");
+    if (airway.includes("partial")) add(amber, "Partial airway obstruction", "airway_partial", "amber");
+    if (/irregular/i.test(rhythm) && s.c_hr_rhythm_new === true) {
+      add(amber, "New irregular rhythm", "c_hr_rhythm_new", "amber");
+    }
     const temp = num(s.e_temp);
     if (temp) {
       if (temp >= 38.5) addVital(red, `Febrile ${temp}`, "e_temp", "red", "temp");
@@ -775,6 +793,10 @@
           parts.push("Dyspnea");
           flagged.amber.push("seg_resp_dyspnea");
         }
+      }
+      if (/increas|labour|labor/i.test(s.b_wob || "")) {
+        parts.push("increased work of breathing");
+        flagged.amber.push("b_wob");
       }
       if (s.resp_tachypnea === true) {
         parts.push("tachypnea >20bpm");
@@ -1346,6 +1368,7 @@
     discharge.innerHTML = `<span class="qr-discharge-text">${question}</span>` + (already || chosen === "red" ? "" : '<span class="qr-discharge-hint">Set it in the plan below</span>');
   }
   function renderDerivedDisplays(s, result) {
+    updateRhythmNewVisibility();
     renderQuickReviewDecision(s, result);
     renderQuickChips(s);
     updateAgeMitigationUI();
@@ -1524,6 +1547,15 @@
     const type = document.querySelector('input[name="reviewType"]:checked')?.value || "post";
     const on = !!$("chk_medical_rounding")?.checked;
     el.style.display = team === "ICU" && type === "pre" && on ? "block" : "none";
+  }
+  function updateRhythmNewVisibility() {
+    const wrapper = $("hr_rhythm_new_wrapper");
+    if (!wrapper) return;
+    const irregular = /irregular/i.test($("c_hr_rhythm")?.value || "");
+    wrapper.style.display = irregular ? "block" : "none";
+    if (!irregular) {
+      $("seg_c_hr_rhythm_new")?.querySelectorAll(".seg-btn").forEach((b) => b.classList.remove("active"));
+    }
   }
   function updateWardOptions() {
     const type = document.querySelector('input[name="reviewType"]:checked')?.value || "post";
@@ -3814,6 +3846,20 @@
           if (yesBtn && !yesBtn.classList.contains("active")) yesBtn.click();
         }
       }, 800));
+    }
+    const wobInput = $("b_wob");
+    if (wobInput) {
+      wobInput.addEventListener("input", debounce(() => {
+        const val = wobInput.value.toLowerCase();
+        if (/increas|labour|labor/.test(val)) {
+          const respSeg = $("seg_resp_concern");
+          const respYes = respSeg?.querySelector('.seg-btn[data-value="true"]');
+          if (respYes && !respYes.classList.contains("active")) {
+            respYes.click();
+            showToast("Auto-selected Resp Concern - increased WOB (B)", 1500);
+          }
+        }
+      }, 600));
     }
     const coughInput = $("b_cough");
     if (coughInput) {
