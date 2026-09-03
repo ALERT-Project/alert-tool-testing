@@ -28,7 +28,21 @@ export function iconSetForPath(pathname = location.pathname) {
     return /alert-tool-testing/i.test(pathname) ? 'test' : 'alert';
 }
 
-export function nowTimeStr() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+// 24-hour HH:MM, built by hand rather than by toLocaleTimeString.
+//
+// The clock the tool shows has to be a ward clock and it has to be one that <input type="time">
+// accepts, and toLocaleTimeString could not be relied on for either. Without hour12 it follows
+// the machine's locale, so an en-US default returned "12:05 AM" - not how any handover is
+// written. With hour12:false it selects the h24 cycle, which numbers midnight as 24:00: the
+// time input rejects that (its range stops at 23:59), silently cleared itself, and the note
+// then fell back to the 12-hour string. So between 23:53 and 00:07 the Time of Review box came
+// up blank and the handover line read "4/9 12:05 AM." - the shift on which ALERT does most of
+// its reviewing. Two digits from getHours/getMinutes cannot do either.
+export function timeHHMM(d = new Date()) {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export function nowTimeStr() { return timeHHMM(); }
 
 export function todayDateStr() { const d = new Date(); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; }
 

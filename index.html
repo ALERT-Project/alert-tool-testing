@@ -1104,7 +1104,12 @@
              Each takes its own typed entries, so what the clinician writes lands where they
              wrote it rather than being guessed at from the wording. -->
         <div id="patient_factors_wrapper" class="card" style="margin-top:20px;">
-            <h2 class="card-title">Patient Factors <span id="factors_count" class="issues-count"></span></h2>
+            <!-- The hint says what belongs on each list, because the two card titles are the only
+                 thing distinguishing them and "factors" vs "risks" is not self-evident at 3am.
+                 tabindex makes it reachable without a mouse, and by tap on a tablet - a hint
+                 only hover can reach is no hint on the devices the ward actually carries. -->
+            <h2 class="card-title" tabindex="0"
+                data-hint="Mobility, bowels, diet, PICS - how the patient is, rather than what might send them back.">Patient Factors <span id="factors_count" class="issues-count"></span></h2>
             <div id="patient_factors_list"></div>
             <div class="issue-add-row">
                 <input id="manualFactorInput" type="text" placeholder="Add a patient factor and press Enter…"
@@ -1114,7 +1119,8 @@
         </div>
 
         <div id="scraped_risks_wrapper" class="card" style="margin-top:20px;">
-            <h2 class="card-title">Readmission Risks <span id="issues_count" class="issues-count"></span></h2>
+            <h2 class="card-title" tabindex="0"
+                data-hint="What could send this patient back to ICU.">Readmission Risks <span id="issues_count" class="issues-count"></span></h2>
             <!-- The tool's own reading of today's numbers - a clotting result against its
                  documented target, a MODS parameter to confirm, an electrolyte low enough to
                  replace. Not a curated list, so no controls: they apply or they don't, and

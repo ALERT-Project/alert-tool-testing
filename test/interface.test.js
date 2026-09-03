@@ -2216,3 +2216,23 @@ test('the Pre-Stepdown rounding toggle reaches the note at all', async () => {
     assert.match(document.getElementById('summary').value, /medical rounding/i);
     close();
 });
+
+test('the two Quick Review lists say what belongs on them', async () => {
+    // "Patient Factors" and "Readmission Risks" is the whole of the distinction on screen, and
+    // which list a line belongs on is not self-evident from those two words. jsdom has no
+    // layout engine, so what is testable here is that the hint exists, says the right thing,
+    // and can be reached without a mouse - the appearance is style.css's business.
+    const { window, document, close } = await loadTool();
+    const factors = document.querySelector('#patient_factors_wrapper .card-title');
+    const risks = document.querySelector('#scraped_risks_wrapper .card-title');
+
+    assert.match(factors.dataset.hint, /[Mm]obility.*bowels.*diet.*PICS/,
+        'names the kinds of thing that go on it');
+    assert.ok(!/risk/i.test(factors.dataset.hint.split(' - ')[0]),
+        'and leads with what it is, not with what it is not');
+    assert.match(risks.dataset.hint, /back to ICU/);
+
+    assert.equal(factors.getAttribute('tabindex'), '0', 'reachable by keyboard and by tap');
+    assert.equal(risks.getAttribute('tabindex'), '0');
+    close();
+});

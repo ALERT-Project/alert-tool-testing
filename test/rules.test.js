@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateRisks, calculateWardTime } from '../src/js/rules.js';
+import { timeHHMM } from '../src/js/utils.js';
 
 // Synthetic patients only. Every number here is invented - these fixtures exist to pin the
 // rules down, not to describe anyone, and nothing patient-identifiable belongs in this file.
@@ -375,3 +376,31 @@ test('stable pre-stepdown patient with a modification is not escalated by it', (
     assert.equal(r.cat.text, 'CAT 3');
 });
 
+
+// --- The clock the ward reads ------------------------------------------------------------
+//
+// timeHHMM exists because toLocaleTimeString could not be trusted with either half of the job.
+// Both failures were live: an en-US default returned "12:05 AM", and hour12:false selected the
+// h24 cycle, which writes midnight as "24:00" - a value <input type="time"> rejects outright,
+// so the Time of Review box silently emptied itself and the note fell back to the 12-hour
+// string. Between 23:53 and 00:07 that is the whole night shift's clock.
+
+test('the review clock is 24-hour, zero-padded, and never writes 24:00', () => {
+    const at = (h, m) => timeHHMM(new Date(2026, 8, 4, h, m));
+
+    assert.equal(at(0, 0), '00:00', 'midnight is 00:00 - "24:00" is out of range for a time input');
+    assert.equal(at(0, 5), '00:05');
+    assert.equal(at(9, 5), '09:05', 'padded, so HH:MM can be relied on');
+    assert.equal(at(14, 30), '14:30', 'and never 2:30 PM');
+    assert.equal(at(23, 59), '23:59');
+
+    // The box rounds to the nearest quarter hour before formatting, and 23:53 rounds up past
+    // midnight - which is exactly where the old formatter produced its out-of-range value.
+    const d = new Date(2026, 8, 3, 23, 53);
+    d.setMinutes(Math.round(d.getMinutes() / 15) * 15);
+    assert.equal(timeHHMM(d), '00:00', 'rolling over the day still yields a time that will stick');
+
+    for (let h = 0; h < 24; h++) {
+        assert.match(at(h, 0), /^([01]\d|2[0-3]):[0-5]\d$/, `hour ${h} is in range`);
+    }
+});

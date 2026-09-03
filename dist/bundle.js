@@ -15,8 +15,11 @@
   function iconSetForPath(pathname = location.pathname) {
     return /alert-tool-testing/i.test(pathname) ? "test" : "alert";
   }
+  function timeHHMM(d = /* @__PURE__ */ new Date()) {
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
   function nowTimeStr() {
-    return (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return timeHHMM();
   }
   function todayDateStr() {
     const d = /* @__PURE__ */ new Date();
@@ -1985,11 +1988,9 @@
     if (handoverActions) handoverActions.style.display = "none";
     window.dismissedDischarge = false;
     const now = /* @__PURE__ */ new Date();
-    const m = now.getMinutes();
-    const rounded = Math.round(m / 15) * 15;
-    now.setMinutes(rounded);
+    now.setMinutes(Math.round(now.getMinutes() / 15) * 15);
     const tb = $("reviewTime");
-    if (tb) tb.value = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    if (tb) tb.value = timeHHMM(now);
     const p = document.querySelector('input[value="post"]');
     if (p) p.checked = true;
     document.querySelectorAll('input[name="reviewModeType"]').forEach((r) => r.checked = false);
@@ -2756,7 +2757,7 @@
   function updateLastSaved() {
     const iso = sessionStorage.getItem("alertToolLastSaved_v7_7");
     const el = $("lastSaved");
-    if (el) el.textContent = iso ? "Last saved: " + new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Last saved: --:--";
+    if (el) el.textContent = iso ? "Last saved: " + timeHHMM(new Date(iso)) : "Last saved: --:--";
   }
   function getState() {
     const state = {};
@@ -3655,10 +3656,8 @@
     const timeBox = $("reviewTime");
     if (timeBox && !timeBox.value) {
       const now = /* @__PURE__ */ new Date();
-      const m = now.getMinutes();
-      const rounded = Math.round(m / 15) * 15;
-      now.setMinutes(rounded);
-      timeBox.value = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      now.setMinutes(Math.round(now.getMinutes() / 15) * 15);
+      timeBox.value = timeHHMM(now);
     }
     function syncInputs(id1, id2) {
       const el1 = $(id1), el2 = $(id2);

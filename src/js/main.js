@@ -5,7 +5,7 @@
    MIT License - https://opensource.org/licenses/MIT
    ========================================= */
 
-import { $, debounce, showToast, disableAutofill } from './utils.js';
+import { $, debounce, showToast, disableAutofill, timeHHMM } from './utils.js';
 import { setNotice, clearNotice, NOTICE_PRIORITY } from './notices.js';
 import { ACCORDION_KEY, staticInputs, segmentedInputs, toggleInputs, SELF_DERIVED_RISK, FIELD_BACKED_FACTOR} from './config.js';
 import {
@@ -429,10 +429,8 @@ function initialize() {
     const timeBox = $('reviewTime');
     if (timeBox && !timeBox.value) {
         const now = new Date();
-        const m = now.getMinutes();
-        const rounded = Math.round(m / 15) * 15;
-        now.setMinutes(rounded);
-        timeBox.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        now.setMinutes(Math.round(now.getMinutes() / 15) * 15);
+        timeBox.value = timeHHMM(now);
     }
 
     function syncInputs(id1, id2) {

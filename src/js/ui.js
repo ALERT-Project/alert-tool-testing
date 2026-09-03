@@ -5,7 +5,7 @@
    MIT License - https://opensource.org/licenses/MIT
    ========================================= */
 
-import { $, debounce, showToast, disableAutofill, iconSetForPath } from './utils.js';
+import { $, debounce, showToast, disableAutofill, iconSetForPath, timeHHMM } from './utils.js';
 import { setNotice, clearNotice, NOTICE_PRIORITY } from './notices.js';
 import { normalRanges, comorbMap, toggleInputs, staticInputs, ACCORDION_KEY, STORAGE_KEY, UNDO_KEY, SELF_DERIVED_RISK, GATE_RISK_ID, NOTE_BLOOD_LABELS} from './config.js';
 import {
@@ -628,10 +628,8 @@ export function clearData() {
     window.dismissedDischarge = false;
 
     const now = new Date();
-    const m = now.getMinutes();
-    const rounded = Math.round(m / 15) * 15;
-    now.setMinutes(rounded);
-    const tb = $('reviewTime'); if (tb) tb.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    now.setMinutes(Math.round(now.getMinutes() / 15) * 15);
+    const tb = $('reviewTime'); if (tb) tb.value = timeHHMM(now);
 
     const p = document.querySelector('input[value="post"]'); if (p) p.checked = true;
     // Radios survive the checkbox sweep above, so the last patient's review method used to

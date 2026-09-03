@@ -6,7 +6,7 @@
    ========================================= */
 
 import { STORAGE_KEY, UNDO_KEY, ACCORDION_KEY, staticInputs, segmentedInputs, toggleInputs, selectInputs, deviceTypes } from './config.js';
-import { $, showToast } from './utils.js';
+import { $, showToast, timeHHMM } from './utils.js';
 import { handleSegmentClick, updateWardOptions, updateReviewTypeVisibility, updateReviewerRoleVisibility, updateIcuRoundingPrompt, updateWardOtherVisibility, createDeviceEntry, updateDevicesSectionVisibility, toggleOxyFields, toggleInfusionsBox, toggleBowelDate } from './ui.js';
 
 window.prevBloods = {};
@@ -382,7 +382,7 @@ export function loadState() {
 export function updateLastSaved() {
     const iso = sessionStorage.getItem('alertToolLastSaved_v7_7');
     const el = $('lastSaved');
-    if (el) el.textContent = iso ? 'Last saved: ' + new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Last saved: --:--';
+    if (el) el.textContent = iso ? 'Last saved: ' + timeHHMM(new Date(iso)) : 'Last saved: --:--';
 }
 
 export function pushUndo(snapshot) { sessionStorage.setItem(UNDO_KEY, JSON.stringify({ snapshot, created: Date.now() })); }

@@ -2282,3 +2282,32 @@ hr { border: none; height: 1px; background-color: var(--line); margin: 24px 0 18
   .ward-bed-pair .wb-bed { margin-top: 12px; }
   .ward-bed-pair .wb-bed input { width: 100%; }
 }
+
+/* Quick Review only: what belongs on the Patient Factors and Readmission Risks lists, on
+   hover or focus. Quick Review is where the two cards sit side by side with nothing else on
+   screen to explain them; Full Review has the whole assessment around them for context, and
+   adding a tooltip to every heading there is the clutter this mode exists to avoid.
+   :focus-visible as well as :hover so it is reachable by keyboard and by tap. */
+body.quick-review-active .card-title[data-hint] { position: relative; cursor: help; }
+body.quick-review-active .card-title[data-hint]::before {
+  content: '?';
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-right: 6px;
+  border: 1px solid var(--line); border-radius: 50%;
+  font-size: 10px; font-weight: var(--fw-semibold); color: var(--muted);
+  vertical-align: middle;
+}
+body.quick-review-active .card-title[data-hint]:hover::after,
+body.quick-review-active .card-title[data-hint]:focus-visible::after {
+  content: attr(data-hint);
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  /* The card is narrow, so the tooltip is allowed to reach past it rather than wrapping to
+     five lines - but never past the viewport on a phone. */
+  width: max-content; max-width: min(280px, calc(100vw - 32px));
+  padding: 8px 10px;
+  background: var(--ink); color: var(--card);
+  border-radius: 6px;
+  font-size: var(--fs-xs); font-weight: var(--fw-normal); line-height: 1.4;
+  white-space: normal; text-align: left;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+}
