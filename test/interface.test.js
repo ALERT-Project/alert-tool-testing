@@ -2236,3 +2236,27 @@ test('the two Quick Review lists say what belongs on them', async () => {
     assert.equal(risks.getAttribute('tabindex'), '0');
     close();
 });
+
+// --- hidden means hidden ------------------------------------------------------------------
+//
+// In a real browser the [hidden] rule comes from the UA stylesheet, so any author rule setting
+// display outranks it: .checks-strip { display: flex } left an element the JS had correctly
+// marked hidden on screen as an empty dashed box under Readmission Risks. style.css now carries
+// one !important guard for the whole document.
+//
+// This cannot be tested by rendering. jsdom resolves [hidden] to display:none whatever the
+// author stylesheet says - the exact opposite of the browser - so a test that loads the sheet
+// and reads getComputedStyle passes with the guard deleted. Checking the source is all that is
+// honestly available, so that is what this does.
+
+test('the stylesheet keeps its guard on the hidden attribute', () => {
+    const css = readFileSync(new URL('../src/css/style.css', import.meta.url), 'utf8');
+    assert.match(css, /^\[hidden\] \{ display: none !important; \}$/m,
+        'without this, any class setting display puts a hidden element back on screen');
+
+    // Six of these were written one at a time, each after the bug was found again. They are
+    // harmless now but they are also the record of how often this recurs - if one is ever the
+    // only guard left, the global rule has gone.
+    assert.ok((css.match(/\[hidden\]\s*\{\s*display:\s*none/g) || []).length >= 2,
+        'the per-class guards are still there behind it');
+});

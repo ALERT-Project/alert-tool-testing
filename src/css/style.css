@@ -5,6 +5,17 @@
    MIT License - https://opensource.org/licenses/MIT
    ========================================= */
 
+/* The hidden attribute means hidden, everywhere, whatever else claims otherwise.
+   The browser hides [hidden] from its own stylesheet, which any author rule setting display
+   outranks - so a class like .checks-strip { display: flex } quietly overrode it, and an
+   element the JS had correctly marked hidden stayed on screen as an empty dashed box under
+   Readmission Risks. Six rules already carried their own .foo[hidden] { display: none }
+   guard, one written each time the bug was found again; two did not. This is that guard,
+   written once, for every element that will ever be toggled this way. Anything that needs to
+   be laid out must not be carrying the attribute in the first place. */
+[hidden] { display: none !important; }
+
+
 /* Inter v4 (latin subset, variable) - SIL Open Font License 1.1.
    Self-hosted deliberately: the tool has no other external runtime dependency, so it
    must render identically offline and on locked-down hospital networks. */
