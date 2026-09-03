@@ -3359,7 +3359,10 @@
     const time = s.reviewTime || nowTimeStr();
     const parts = [initials ? `${dateStr} ${time} ${initials}.` : `${dateStr} ${time}.`];
     parts.push(s.reviewModeType === "chart" ? "CHART R/V." : "PHYSICAL R/V.");
-    parts.push(s.chk_use_mods ? `MODS ${s.mods_score || "--"}.` : `ADDS ${s.adds || "--"}.`);
+    const scoreVal = s.chk_use_mods ? s.mods_score : s.adds;
+    if (scoreVal !== void 0 && String(scoreVal).trim() !== "") {
+      parts.push(`${s.chk_use_mods ? "MODS" : "ADDS"} ${String(scoreVal).trim()}.`);
+    }
     if (s.chk_bloods_nil_sig || s.bloods_status === "nil_sig") parts.push("Bloods nil sig.");
     else if (s.bloods_status === "improving") parts.push("Bloods improving.");
     else if (s.bloods_status === "not_checked") parts.push("Bloods not checked.");

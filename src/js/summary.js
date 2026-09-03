@@ -494,7 +494,15 @@ export function generateHandoverLine(s, activeIssuesList = [], cat = null, red =
     // actually been laid eyes on - a CAT 3 discharge shouldn't rest on chart reviews alone,
     // and the spreadsheet is where that history lives.
     parts.push(s.reviewModeType === 'chart' ? 'CHART R/V.' : 'PHYSICAL R/V.');
-    parts.push(s.chk_use_mods ? `MODS ${s.mods_score || '--'}.` : `ADDS ${s.adds || '--'}.`);
+    // Omitted rather than stubbed when there is no score, for the same reason the initials are:
+    // this line is pasted into a shared sheet that is read by scanning down a column, and
+    // "ADDS --" occupies the space of a score while saying nothing. A reader cannot tell a
+    // patient nobody scored from one scored at zero, and the dashes look enough like data to
+    // stop them asking. Nothing at all is the honest shape of a value that was never recorded.
+    const scoreVal = s.chk_use_mods ? s.mods_score : s.adds;
+    if (scoreVal !== undefined && String(scoreVal).trim() !== '') {
+        parts.push(`${s.chk_use_mods ? 'MODS' : 'ADDS'} ${String(scoreVal).trim()}.`);
+    }
 
     if (s.chk_bloods_nil_sig || s.bloods_status === 'nil_sig') parts.push('Bloods nil sig.');
     else if (s.bloods_status === 'improving') parts.push('Bloods improving.');

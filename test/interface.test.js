@@ -2488,3 +2488,28 @@ test('an older note carrying both lines brings both back into the one field', as
         'a labelled medication line never becomes an Other Device');
     close();
 });
+
+test('the handover line omits the score rather than stubbing it', async () => {
+    // Same reasoning as the initials: this line is pasted into a shared sheet that is read by
+    // scanning down a column, and "ADDS --" occupies the space of a score while saying nothing.
+    // A reader cannot tell a patient nobody scored from one scored at zero, and the dashes look
+    // enough like data to stop them asking.
+    const { window, document, close } = await loadTool();
+    type(window, 'ptName', 'ABC');
+    await tick(window, 600);
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+
+    const line = document.getElementById('handoverLine').value;
+    assert.ok(!/--/.test(line), `no stub anywhere on the line: ${line}`);
+    assert.ok(!/ADDS/.test(line), 'and no empty ADDS heading either');
+    assert.match(line, /PHYSICAL R\/V\./, 'the rest of the line is unchanged');
+
+    // A real zero is a real score and still prints - that is the case the dashes were hiding.
+    type(window, 'adds', '0');
+    await tick(window, 600);
+    click(window, '#btn_generate_summary');
+    await tick(window, 600);
+    assert.match(document.getElementById('handoverLine').value, /ADDS 0\./);
+    close();
+});
