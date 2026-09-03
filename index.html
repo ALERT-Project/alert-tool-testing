@@ -472,8 +472,13 @@
                             </div>
                             <div id="adds_override_box" style="display:none;">
                                 <input type="hidden" id="addsManual" value="false">
-                                <label for="addsOverrideNote"><span id="adds_override_label">MODS score - calculator
-                                        not applied - enter details:</span></label>
+                                <!-- Just the field's name. The button directly above it already
+                                     says "MODS score - calculator not applied", and this label
+                                     used to repeat that sentence in full before adding "- enter
+                                     details:" - the same statement twice, one of them in the
+                                     place reserved for saying what to type. It matches the MODS
+                                     Details field in the A-E panel, which is where this writes. -->
+                                <label for="addsOverrideNote"><span id="adds_override_label">MODS details</span></label>
                                 <input id="addsOverrideNote" type="text" autocomplete="off"
                                     placeholder="e.g. parameters modified by consultant" />
                             </div>
