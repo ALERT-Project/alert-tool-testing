@@ -2776,6 +2776,11 @@
     renderOneList("factors");
     renderOneList("risks");
     renderChecksStrip();
+    const risksCard = $("scraped_risks_wrapper");
+    if (risksCard) {
+      const holding = getIssuesForList("risks").length > 0 || getActiveChecks().length > 0;
+      risksCard.hidden = !isQuickReviewMode && !holding;
+    }
   }
   function saveState(instantly = false) {
     const state = getState();

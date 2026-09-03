@@ -726,8 +726,14 @@ body.quick-review-active .accordion .qr-chip[data-filled] { margin-right: auto; 
    hole. The list is the part that stretches; the notes box keeps a fixed, generous height. */
 /* Quick-Review-only cards. Hidden by default in both directions - see the note beside
    QUICK_REVIEW_SECTIONS_TO_HIDE in ui.js for why this moved out of JS. */
-#quick_notes_wrapper, #scraped_risks_wrapper { display: none; }
+#quick_notes_wrapper { display: none; }
 body.quick-review-active #quick_notes_wrapper { display: block; }
+/* Readmission Risks is no longer Quick-Review-only. It was hidden here unconditionally while
+   the importer went on staging carried risks into it and the note went on printing them, so a
+   Full Review wrote lines nobody had seen. Whether it shows is decided by whether it is
+   holding anything - renderScrapedIssuesList sets the hidden attribute, and the guard at the
+   top of this sheet makes that stick against these display rules. */
+#scraped_risks_wrapper { display: block; }
 body.quick-review-active #scraped_risks_wrapper { display: flex; }
 
 #quickGrid #scraped_risks_wrapper {

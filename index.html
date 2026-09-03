@@ -1126,7 +1126,10 @@
             </div>
         </div>
 
-        <div id="scraped_risks_wrapper" class="card" style="margin-top:20px;">
+        <!-- Starts hidden so a Full Review with nothing carried in and nothing to check never
+             flashes an empty card. renderScrapedIssuesList shows it when it is holding
+             something, and unconditionally in Quick Review. -->
+        <div id="scraped_risks_wrapper" class="card" style="margin-top:20px;" hidden>
             <h2 class="card-title" tabindex="0"
                 data-hint="What could send this patient back to ICU.">Readmission Risks <span id="issues_count" class="issues-count"></span></h2>
             <!-- The tool's own reading of today's numbers - a clotting result against its

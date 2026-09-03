@@ -2366,3 +2366,69 @@ test('typing increased WOB opens the respiratory gate and says why', async () =>
         'and the risk carries the reason rather than firing bare');
     close();
 });
+
+// --- Readmission Risks in Full Review ------------------------------------------------------
+//
+// The card was hidden outside Quick Review by a blanket CSS rule while the importer went on
+// staging carried risks into it and the note went on printing them, marked "(carried 2)" -
+// which asserts they were looked at today. The nudge told the reviewer to edit or delete them,
+// and the rows it meant were not on the page. No test caught it because jsdom applies no CSS.
+
+test('the Readmission Risks card is on the page in Full Review whenever it is holding something', async () => {
+    const { window, document, close } = await loadTool();
+    const card = document.getElementById('scraped_risks_wrapper');
+    type(window, 'ptName', 'ABC');
+    await tick(window, 600);
+    assert.equal(card.hidden, true, 'nothing carried, nothing to check - Full Review raises its risks through the gates');
+
+    // The checks strip lives inside this card, so it was invisible in Full Review for the same
+    // reason. An SpO2 below target is a check, not a risk, and it brings the card with it.
+    type(window, 'b_spo2', '92');
+    await tick(window, 700);
+    assert.equal(card.hidden, false, 'a check is enough to bring it back');
+    assert.match(document.getElementById('bloods_checks_strip').textContent, /SpO2 92%/);
+
+    type(window, 'b_spo2', '');
+    await tick(window, 700);
+    assert.equal(card.hidden, true);
+
+    click(window, 'input[name="reviewDepth"][value="quick"]');
+    await tick(window, 800);
+    assert.equal(card.hidden, false, 'and Quick Review keeps it unconditionally');
+    close();
+});
+
+test('a risk carried into a Full Review is on screen before it is in the note', async () => {
+    const { window, document, close } = await loadTool();
+    type(window, 'ptName', 'ABC');
+    await tick(window, 500);
+    click(window, '#btnOpenImport');
+    document.getElementById('importText').value = [
+        'ALERT CNS post ICU review - Physical review',
+        'Patient: ABC | URN: ...123',
+        '',
+        'IDENTIFIED ICU READMISSION RISK FACTORS:',
+        '- Difficult IV access, discussed with vascular access team',
+        '',
+        'PLAN:',
+        '- ALERT nursing post ICU reviews continue.'
+    ].join('\n');
+    click(window, '#runImport');
+    await tick(window, 300);
+    // A9.3: importing over a form that already holds a patient asks before clearing it.
+    click(window, '#confirmImportOverwrite');
+    await tick(window, 900);
+
+    const card = document.getElementById('scraped_risks_wrapper');
+    assert.equal(card.hidden, false, 'the card carrying the line is on the page');
+    assert.match(card.textContent, /Difficult IV access/);
+    assert.match(document.getElementById('noticeRegion').textContent, /carried from the last note/,
+        'and the nudge now points at something the reviewer can reach');
+
+    // The note prints it as carried, which is a claim that it was reviewed today. That claim is
+    // only honest if the row was visible while it was being made.
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+    assert.match(document.getElementById('summary').value, /- Difficult IV access.*\(carried 2\)/);
+    close();
+});

@@ -380,6 +380,21 @@ export function renderScrapedIssuesList() {
     renderOneList('factors');
     renderOneList('risks');
     renderChecksStrip();
+
+    // The Readmission Risks card was hidden outside Quick Review by a blanket CSS rule, while
+    // the importer went on staging carried risk lines into it and the note went on printing
+    // them - marked "(carried 2)", which asserts they were looked at today. The nudge told the
+    // reviewer to edit or delete them, and the rows it meant were not on the page.
+    //
+    // It appears now whenever it is holding something: carried risks, or the checks strip,
+    // which lives inside this card and had been invisible in Full Review for the same reason.
+    // Empty, it stays away - Full Review raises its risks through the gates, and a blank card
+    // beside them is the second place to record the same thing that Patient Factors was.
+    const risksCard = $('scraped_risks_wrapper');
+    if (risksCard) {
+        const holding = getIssuesForList('risks').length > 0 || getActiveChecks().length > 0;
+        risksCard.hidden = !isQuickReviewMode && !holding;
+    }
 }
 
 export function saveState(instantly = false) {
