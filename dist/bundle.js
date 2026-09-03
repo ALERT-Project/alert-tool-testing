@@ -2656,6 +2656,10 @@
     if (!list) return;
     if (list.querySelector(".scraped-issue-edit")) return;
     const issues = getIssuesForList(listName);
+    if (listName === "factors") {
+      const card = $("patient_factors_wrapper");
+      if (card) card.hidden = !isQuickReviewMode && issues.length === 0;
+    }
     const count = $(ui.count);
     const openCount = issues.filter((i) => !i.resolved).length;
     const goneCount = issues.length - openCount;

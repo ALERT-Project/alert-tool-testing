@@ -1108,7 +1108,10 @@
              handover line has always used - context excluded, risks included - made visible.
              Each takes its own typed entries, so what the clinician writes lands where they
              wrote it rather than being guessed at from the wording. -->
-        <div id="patient_factors_wrapper" class="card" style="margin-top:20px;">
+        <!-- Starts hidden so a Full Review with nothing carried in never flashes an empty card
+             before the first render. state.js shows it when the importer puts something on the
+             list, and unconditionally in Quick Review. -->
+        <div id="patient_factors_wrapper" class="card" style="margin-top:20px;" hidden>
             <!-- The hint says what belongs on each list, because the two card titles are the only
                  thing distinguishing them and "factors" vs "risks" is not self-evident at 3am.
                  tabindex makes it reachable without a mouse, and by tap on a tablet - a hint

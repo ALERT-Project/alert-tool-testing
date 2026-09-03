@@ -2322,3 +2322,9 @@ body.quick-review-active .card-title[data-hint]:focus-visible::after {
   white-space: normal; text-align: left;
   box-shadow: 0 4px 12px rgba(0,0,0,0.18);
 }
+
+/* The Patient Factors add row is Quick Review's. In Full Review the card only ever shows what
+   the last note carried in - mobility, diet, nutrition, PICS, sleep and the psych answer are
+   all asked in the A-E panel, and a free-text box beside them is a second place to record the
+   same thing, in wording the rules cannot read. The card's visibility is set in state.js. */
+body:not(.quick-review-active) #patient_factors_wrapper .issue-add-row { display: none; }

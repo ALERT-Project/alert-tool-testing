@@ -268,6 +268,20 @@ function renderOneList(listName) {
     if (list.querySelector('.scraped-issue-edit')) return;
 
     const issues = getIssuesForList(listName);
+
+    // Full Review asks every patient-factor question in the A-E panel, so the card has no job
+    // there except to show what the last note carried in - and an empty card with an add row
+    // in it is an invitation to record the same thing twice. It appears only when the importer
+    // actually put something on the list, and stays for the rest of the session once it has,
+    // so a line deleted by mistake can still be undone from the struck-through row.
+    //
+    // Quick Review keeps it unconditionally: there is no A-E panel there, which is the whole
+    // reason the list exists.
+    if (listName === 'factors') {
+        const card = $('patient_factors_wrapper');
+        if (card) card.hidden = !isQuickReviewMode && issues.length === 0;
+    }
+
     const count = $(ui.count);
     const openCount = issues.filter(i => !i.resolved).length;
     const goneCount = issues.length - openCount;

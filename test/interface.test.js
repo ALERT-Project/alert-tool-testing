@@ -2260,3 +2260,70 @@ test('the stylesheet keeps its guard on the hidden attribute', () => {
     assert.ok((css.match(/\[hidden\]\s*\{\s*display:\s*none/g) || []).length >= 2,
         'the per-class guards are still there behind it');
 });
+
+// --- Patient Factors: carried in, or not there at all --------------------------------------
+//
+// Full Review asks every one of these questions in the A-E panel - mobility, diet, nutrition,
+// PICS, sleep, psych - and buildPatientFactors() prints them under PATIENT FACTORS: from those
+// fields, with or without this card. So the card's only job in Full Review is showing what the
+// last note carried in, and an empty one is an invitation to record the same thing twice.
+
+test('the Patient Factors card appears in Full Review only when something was carried in', async () => {
+    const { window, document, close } = await loadTool();
+    const card = document.getElementById('patient_factors_wrapper');
+    type(window, 'ptName', 'ABC');
+    await tick(window, 600);
+    assert.equal(card.hidden, true, 'nothing scraped, so no card');
+
+    // Quick Review has no A-E panel, which is the whole reason the list exists there.
+    click(window, 'input[name="reviewDepth"][value="quick"]');
+    await tick(window, 700);
+    assert.equal(card.hidden, false, 'always offered in Quick Review');
+
+    click(window, 'input[name="reviewDepth"][value="full"]');
+    await tick(window, 700);
+    assert.equal(card.hidden, true, 'and taken away again on the way out');
+    close();
+});
+
+test('factors carried in from the last note are shown, not just printed', async () => {
+    const { window, document, close } = await loadTool();
+    click(window, '#btnOpenImport');
+    document.getElementById('importText').value = [
+        'ALERT CNS post ICU review - Physical review',
+        'Patient: ABC | URN: ...123',
+        '',
+        'PATIENT FACTORS:',
+        '- Mobility: 2x assist',
+        '- Awaiting dietitian review',
+        '',
+        'IDENTIFIED ICU READMISSION RISK FACTORS:',
+        '- None identified',
+        '',
+        'PLAN:',
+        '- ALERT nursing post ICU reviews continue.'
+    ].join('\n');
+    click(window, '#runImport');
+    await tick(window, 900);
+
+    const card = document.getElementById('patient_factors_wrapper');
+    assert.equal(card.hidden, false, 'the card comes back with the lines it is holding');
+    assert.match(card.textContent, /Awaiting dietitian review/);
+
+    // A field-backed factor goes to both: into ae_mobility, which is where the next note
+    // regenerates it from, and onto the list, so the card shows the context the patient
+    // arrived with rather than a half of it.
+    assert.equal(document.getElementById('ae_mobility').value, '2x assist');
+    assert.match(document.getElementById('patient_factors_list').textContent, /Mobility: 2x assist/);
+
+    // And each reaches today's note once. Mobility is printed from its field by
+    // buildPatientFactors and held back from the list by MIRRORS_AN_ASSESSMENT_FIELD; the
+    // free-text line has no field to be printed from, so the list is what carries it.
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+    const note = document.getElementById('summary').value;
+    assert.match(note, /- Awaiting dietitian review/);
+    assert.equal((note.match(/Mobility: 2x assist/g) || []).length, 1,
+        'carried once, printed once');
+    close();
+});
