@@ -100,11 +100,37 @@ export function handleSegmentClick(id, value) {
         }
     }
 
+    // The Pre-Stepdown rounding Yes/No is a segmented group standing in for the Post-Stepdown
+    // checkbox, but nothing joined the two: 'medical_rounding_prestepdown' is not in
+    // segmentedInputs, so getState never read the buttons, and the buttons never touched
+    // chk_medical_rounding either - pressing Yes highlighted a button and changed nothing else.
+    // Writing through to the checkbox puts the answer where every reader already looks for it,
+    // the note and the plan included, and lets it save and restore with the rest.
+    if (id === 'medical_rounding_prestepdown') {
+        const on = (value === 'true');
+        const main = $('chk_medical_rounding'); if (main) main.checked = on;
+        const pre = $('chk_medical_rounding_pre'); if (pre) pre.checked = on;
+        updateIcuRoundingPrompt();
+    }
+
     if (id === 'resp_dyspnea' && value !== 'true') {
         const dyspInput = $('dyspneaConcern');
         if (dyspInput) dyspInput.value = '';
         document.querySelectorAll('.quick-select[data-target="dyspneaConcern"]').forEach(b => b.classList.remove('active'));
     }
+}
+
+// An ALERT nurse adds the patient to the medical POC list themselves, in the DMR. An ICU CNS
+// or CNC has no access to it, so their "Yes" is a referral that stays a referral until someone
+// rings the ALERT CN - and this tool stores nothing, so nobody downstream finds out on its
+// behalf. The prompt is the only thing standing between a request made and a request assumed.
+export function updateIcuRoundingPrompt() {
+    const el = $('icu_rounding_call_prompt');
+    if (!el) return;
+    const team = document.querySelector('input[name="reviewTeam"]:checked')?.value || 'ALERT';
+    const type = document.querySelector('input[name="reviewType"]:checked')?.value || 'post';
+    const on = !!$('chk_medical_rounding')?.checked;
+    el.style.display = (team === 'ICU' && type === 'pre' && on) ? 'block' : 'none';
 }
 
 export function updateWardOptions() {
@@ -195,6 +221,8 @@ export function updateReviewerRoleVisibility() {
     // is taken off the page for the duration.
     const redcap = $('btnRedcap');
     if (redcap) redcap.style.display = (team === 'ICU') ? 'none' : '';
+
+    updateIcuRoundingPrompt();
 }
 
 export function updateWardOtherVisibility() {
@@ -650,7 +678,15 @@ export function refreshCategorySelect(autoCat, override, reason, redCount, amber
     if (clearBtn) clearBtn.style.display = chosen ? '' : 'none';
 
     if (isQuickReviewMode) {
-        if (hint) hint.textContent = `Tool has: ${autoCat.text} from the score and bloods`;
+        // Silent while it would only repeat itself. Until a button is pressed the category
+        // shown two lines above IS the calculated one, so naming it again says nothing; and
+        // once the clinician picks the same category the tool did, there is still nothing
+        // between them. The moment the two part company the hint is the only surviving record
+        // of what the score and the bloods came to, so that is when it speaks.
+        if (hint) {
+            const differs = chosen && chosen !== autoCat.id;
+            hint.textContent = differs ? `Tool has: ${autoCat.text} from the score and bloods` : '';
+        }
         const box = $('override_reason_box');
         if (box) { box.style.display = 'none'; box.classList.remove('reason-missing'); }
         const warn = $('override_downgrade_warn');
@@ -804,22 +840,22 @@ export function showNewRiskAlert(newRed = [], newAmber = []) {
     if (!newRiskLog.length) return;
 
     const redCount = newRiskLog.filter(r => r.severity === 'red').length;
-    const amberCount = newRiskLog.length - redCount;
-    const counts = [
-        redCount ? `${redCount} red` : '',
-        amberCount ? `${amberCount} amber` : ''
-    ].filter(Boolean).join(' and ');
 
     // No toast alongside this. The notice says it, the Review List holds the detail, and a
     // toast for every risk on top of a banner about the same risks was the loudest part of the
     // interface for the least information.
+    //
+    // The title used to carry a count - "(1 red and 1 amber)" - and the notice used to close
+    // with three lines on where the risks had been staged and what to do about them. Both went
+    // for the same reason: the list is directly underneath, colour-coded, and short enough to
+    // read at a glance, so the count restated what the eye already had; and the closing lines
+    // were standing instruction, true of every risk this tool has ever raised, reprinted in
+    // full every time one fired.
     setNotice('new-risk', {
         priority: NOTICE_PRIORITY.NEW_RISK,
         tone: redCount ? 'red' : 'amber',
-        html: `<div class="notice-title">⚠️ New risk flagged since this review started (${counts})</div>
-               <ul class="notice-list">${newRiskLog.map(r => `<li class="${r.severity}">${r.text}</li>`).join('')}</ul>
-               <div class="notice-foot">Staged in the Review List. Add detail there or in Quick Notes, or exit to
-                   the full assessment if this needs a fuller work-up.</div>`,
+        html: `<div class="notice-title">⚠️ New risk flagged</div>
+               <ul class="notice-list">${newRiskLog.map(r => `<li class="${r.severity}">${r.text}</li>`).join('')}</ul>`,
         actions: [{ id: 'dismiss-new-risk', label: 'Dismiss', onClick: clearNewRiskAlert }]
     });
 }

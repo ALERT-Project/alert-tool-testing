@@ -2099,3 +2099,120 @@ test('the bloods chip never counts a result the note leaves out', async () => {
     assert.equal(claimed, printed, `the chip claimed ${claimed}; the note printed ${printed} — "${line}"`);
     close();
 });
+
+// --- Pre-Stepdown: the category settles a duration, not a discharge -----------------------
+//
+// The Quick Review prompt used to run its Post-Stepdown wording whatever the review type, and
+// calculateWardTime returns the literal string "(Pre-Stepdown)" as its time - so it asked
+// "(Pre-Stepdown) on the list - CAT 3 - can this patient be discharged from ALERT?" about a
+// patient who had not yet left the unit and was on no list to be discharged from.
+
+test('a Pre-Stepdown category states how long ALERT will carry the patient, not whether to discharge', async () => {
+    const { window, document, close } = await loadTool();
+    click(window, 'input[name="reviewType"][value="pre"]');
+    type(window, 'ptName', 'ABC');
+    type(window, 'adds', '2');
+    await tick(window);
+    click(window, 'input[name="reviewDepth"][value="quick"]');
+    await tick(window, 700);
+
+    const prompt = document.getElementById('qr_discharge_prompt');
+    assert.ok(prompt.hidden, 'still nothing said until the category is chosen');
+
+    const ladder = [['#override_green', 'CAT 3 - up to 24h on the ALERT list after stepdown.'],
+                    ['#override_amber', 'CAT 2 - up to 48h on the ALERT list after stepdown.'],
+                    ['#override_red', 'CAT 1 - up to 72h on the ALERT list after stepdown.']];
+    for (const [btn, expected] of ladder) {
+        click(window, btn);
+        await tick(window);
+        assert.ok(!prompt.hidden, `${btn} says something`);
+        assert.equal(prompt.textContent.trim(), expected);
+    }
+
+    // CAT 2's silence Post-Stepdown exists to avoid leading a discharge decision. There is no
+    // discharge decision here to lead, so all three categories speak.
+    assert.ok(!/discharge/i.test(prompt.textContent), 'discharge is not a Pre-Stepdown question');
+    assert.ok(!/Pre-Stepdown\) on the list/.test(prompt.textContent),
+        'and the time-on-list placeholder never reaches the sentence');
+    close();
+});
+
+test('the Quick Review hint is silent while it would only repeat the category above it', async () => {
+    const { window, document, close } = await loadTool();
+    type(window, 'ptName', 'ABC');
+    type(window, 'adds', '5');   // computes CAT 1
+    await tick(window);
+    click(window, 'input[name="reviewDepth"][value="quick"]');
+    await tick(window, 700);
+
+    const hint = document.getElementById('override_auto_hint');
+    assert.equal(hint.textContent, '', 'nothing chosen yet - the category shown above IS the calculated one');
+
+    click(window, '#override_red');
+    await tick(window);
+    assert.equal(hint.textContent, '', 'agreeing with the tool leaves nothing between them');
+
+    // Once they part company the hint is the only surviving record of what the tool made of
+    // the score and the bloods, so that is when it speaks.
+    click(window, '#override_green');
+    await tick(window);
+    assert.match(hint.textContent, /CAT 1.*score and bloods/);
+    close();
+});
+
+// --- ICU medical rounding: a referral is not an entry on a list --------------------------
+
+test('an ICU reviewer is told to ring the ALERT CN, and the note says the referral is outstanding', async () => {
+    const { window, document, close } = await loadTool();
+    click(window, 'input[name="reviewType"][value="pre"]');
+    await tick(window);
+    click(window, 'input[name="reviewTeam"][value="ICU"]');
+    await tick(window);
+    click(window, 'input[name="clinicianGrade"][value="CNC"]');
+    type(window, 'ptName', 'ABC');
+    await tick(window);
+
+    assert.equal(shown(window, '#icu_rounding_call_prompt'), false, 'nothing asked for until rounding is wanted');
+
+    click(window, '#seg_medical_rounding_prestepdown .seg-btn[data-value="true"]');
+    await tick(window, 600);
+    assert.equal(shown(window, '#icu_rounding_call_prompt'), true);
+    assert.match(document.getElementById('icu_rounding_call_prompt').textContent, /29461/);
+
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+    let note = document.getElementById('summary').value;
+    assert.match(note, /- Referred for ALERT medical rounding - ALERT CN to be contacted\./);
+    assert.ok(!/added to ALERT medical rounding list/.test(note),
+        'an ICU CNC cannot add anyone to the POC list, so the note does not say they did');
+
+    // The same answer from an ALERT reviewer, who holds the list themselves.
+    click(window, 'input[name="reviewTeam"][value="ALERT"]');
+    await tick(window, 600);
+    assert.equal(shown(window, '#icu_rounding_call_prompt'), false, 'ALERT staff have the list in front of them');
+    click(window, '#btn_generate_summary');
+    await tick(window, 600);
+    note = document.getElementById('summary').value;
+    assert.match(note, /- Patient added to ALERT medical rounding list for further review\./);
+    close();
+});
+
+test('the Pre-Stepdown rounding toggle reaches the note at all', async () => {
+    // seg_medical_rounding_prestepdown was not in segmentedInputs and never touched
+    // chk_medical_rounding, so pressing Yes highlighted a button and changed nothing:
+    // the answer reached neither the plan nor the note.
+    const { window, document, close } = await loadTool();
+    click(window, 'input[name="reviewType"][value="pre"]');
+    type(window, 'ptName', 'ABC');
+    await tick(window);
+    click(window, '#seg_medical_rounding_prestepdown .seg-btn[data-value="true"]');
+    await tick(window, 600);
+    assert.equal(document.getElementById('chk_medical_rounding').checked, true,
+        'the buttons write through to the checkbox every other reader looks at');
+    assert.match(document.getElementById('followUpInstructions').textContent, /Medical Rounding/i);
+
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 600);
+    assert.match(document.getElementById('summary').value, /medical rounding/i);
+    close();
+});

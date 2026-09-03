@@ -770,6 +770,25 @@ body.quick-review-active #alert_actions_section { margin-top: 12px; padding-top:
   margin-bottom: 8px;
 }
 .override-head .override-auto-hint { margin-bottom: 0; }
+/* Quick Review leaves this empty whenever it would only repeat the category shown above it.
+   An empty flex child still eats the row's gap, so it stands down entirely rather than
+   pushing the heading off centre with a blank. */
+.override-auto-hint:empty { display: none; }
+
+/* The ICU-only instruction under the Pre-Stepdown rounding toggle. Bordered rather than plain
+   text because it asks for an action off the screen - a phone call - which nothing else on
+   this page does, and which nothing here can confirm happened. */
+.icu-call-prompt {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.35;
+}
 
 @media (max-width: 900px) {
   body.quick-review-active #quickGrid { grid-template-columns: 1fr; }

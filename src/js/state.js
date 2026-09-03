@@ -7,7 +7,7 @@
 
 import { STORAGE_KEY, UNDO_KEY, ACCORDION_KEY, staticInputs, segmentedInputs, toggleInputs, selectInputs, deviceTypes } from './config.js';
 import { $, showToast } from './utils.js';
-import { handleSegmentClick, updateWardOptions, updateReviewTypeVisibility, updateReviewerRoleVisibility, updateWardOtherVisibility, createDeviceEntry, updateDevicesSectionVisibility, toggleOxyFields, toggleInfusionsBox, toggleBowelDate } from './ui.js';
+import { handleSegmentClick, updateWardOptions, updateReviewTypeVisibility, updateReviewerRoleVisibility, updateIcuRoundingPrompt, updateWardOtherVisibility, createDeviceEntry, updateDevicesSectionVisibility, toggleOxyFields, toggleInfusionsBox, toggleBowelDate } from './ui.js';
 
 window.prevBloods = {};
 
@@ -555,6 +555,18 @@ export function restoreState(state) {
         const el = $(id);
         if (el && state[id] !== undefined) el.checked = state[id];
     });
+
+    // The Pre-Stepdown rounding buttons are driven from the same checkbox rather than saved
+    // separately, so they have to be put back to match it - otherwise a restored Yes shows an
+    // unpressed pair of buttons over a note that says the patient was referred.
+    const roundingSeg = $('seg_medical_rounding_prestepdown');
+    if (roundingSeg) {
+        const on = !!state['chk_medical_rounding'];
+        const pre = $('chk_medical_rounding_pre'); if (pre) pre.checked = on;
+        roundingSeg.querySelectorAll('.seg-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.value === String(on)));
+    }
+    updateIcuRoundingPrompt();
 
     if (state['chk_use_mods']) $('mods_inputs').style.display = 'block';
     

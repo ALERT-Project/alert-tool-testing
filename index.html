@@ -2005,7 +2005,7 @@
                  more now: the hours were deliberately taken out of the DMR note on the
                  grounds that they stay on screen for the clinician, and this is the screen. -->
             <div class="follow-up-plan">
-                <div class="section-title">Follow-up plan</div>
+                <div class="section-title">Proposed follow-up</div>
                 <div id="followUpInstructions"></div>
             </div>
 
@@ -2092,6 +2092,14 @@
                         <div class="segmented-group" id="seg_medical_rounding_prestepdown" style="max-width: 200px; margin-top: 6px;">
                             <button type="button" class="seg-btn" data-value="true">Yes</button>
                             <button type="button" class="seg-btn active" data-value="false">No</button>
+                        </div>
+                        <!-- ICU reviewers only. An ALERT nurse adds the patient to the medical
+                             POC list themselves, in the DMR; an ICU CNS or CNC has no access to
+                             it, so for them "Yes" is a referral that only becomes real when
+                             somebody picks up the phone. Saying so here is the difference
+                             between a request made and a request believed to have been made. -->
+                        <div id="icu_rounding_call_prompt" class="icu-call-prompt" style="display:none;">
+                            Please call the ALERT CN on <strong>29461</strong> to add to the Medical POC list.
                         </div>
                     </div>
                 </div>

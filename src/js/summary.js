@@ -431,7 +431,15 @@ export function generateSummary(s, cat, wardTimeTxt, red, amber, suppressed, act
     }
 
     if (s.chk_medical_rounding) {
-        lines.push('- Patient added to ALERT medical rounding list for further review.');
+        // "Added" is only true of a reviewer who can add them. An ALERT nurse holds the medical
+        // POC list in the DMR and puts the patient on it themselves; an ICU CNS or CNC has no
+        // access to it, so at the moment their note is written nothing has been added - a call
+        // to the ALERT CN is still outstanding. The note says which of the two happened, so
+        // that a reader who finds the patient absent from the list knows whether that is an
+        // error or simply the next step.
+        lines.push(String(s.clinicianRole || '').startsWith('ICU')
+            ? '- Referred for ALERT medical rounding - ALERT CN to be contacted.'
+            : '- Patient added to ALERT medical rounding list for further review.');
     }
 
     if (!s.chk_discharge_alert && !s.chk_discharge_pending_bloods && s.stepdown_suitable !== false) {

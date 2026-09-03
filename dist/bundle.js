@@ -1260,9 +1260,11 @@
         planHtml = `<div class="status" style="color:#ea580c; font-weight: 700;">Discharge pending next bloods</div>`;
       } else {
         planHtml = `<div class="status ${cssClass}">At least daily ALERT nursing reviews for up to ${h} post-ICU stepdown.</div>`;
-        planHtml += `<div style="margin-top:2px; font-weight:500; font-size: 0.9em; color:var(--text-light);">- Please contact ALERT if further support required between reviews.</div>`;
       }
-      if (s.chk_medical_rounding) planHtml += `<div style="margin-top:2px; font-weight:600; color:var(--accent);">+ Added to ALERT Medical Rounding List</div>`;
+      if (s.chk_medical_rounding) {
+        const referralOnly = String(s.clinicianRole || "").startsWith("ICU");
+        planHtml += `<div style="margin-top:2px; font-weight:600; color:var(--accent);">${referralOnly ? "+ Referred for ALERT Medical Rounding - ALERT CN to be contacted" : "+ Added to ALERT Medical Rounding List"}</div>`;
+      }
       const fu = $("followUpInstructions");
       if (fu) fu.innerHTML = planHtml;
       checkCompleteness(s, countComorbs);
@@ -1310,6 +1312,20 @@
     const onList = result.timeData?.text || "";
     const already = s.chk_discharge_alert || s.chk_discharge_pending_bloods;
     let question = null;
+    if (s.reviewType === "pre") {
+      const preHours = { red: "72h", amber: "48h", green: "24h" }[chosen];
+      const preCat = { red: "CAT 1", amber: "CAT 2", green: "CAT 3" }[chosen];
+      if (preHours) question = `${preCat} - up to ${preHours} on the ALERT list after stepdown.`;
+      if (question) {
+        discharge.hidden = false;
+        discharge.className = "qr-discharge-prompt";
+        discharge.innerHTML = `<span class="qr-discharge-text">${question}</span>`;
+        return;
+      }
+      discharge.hidden = true;
+      discharge.innerHTML = "";
+      return;
+    }
     if (already) {
       question = "Discharge from the ALERT list is recorded in the plan below.";
     } else if (chosen === "green") {
@@ -1484,11 +1500,27 @@
         }
       }
     }
+    if (id === "medical_rounding_prestepdown") {
+      const on = value === "true";
+      const main = $("chk_medical_rounding");
+      if (main) main.checked = on;
+      const pre = $("chk_medical_rounding_pre");
+      if (pre) pre.checked = on;
+      updateIcuRoundingPrompt();
+    }
     if (id === "resp_dyspnea" && value !== "true") {
       const dyspInput = $("dyspneaConcern");
       if (dyspInput) dyspInput.value = "";
       document.querySelectorAll('.quick-select[data-target="dyspneaConcern"]').forEach((b) => b.classList.remove("active"));
     }
+  }
+  function updateIcuRoundingPrompt() {
+    const el = $("icu_rounding_call_prompt");
+    if (!el) return;
+    const team = document.querySelector('input[name="reviewTeam"]:checked')?.value || "ALERT";
+    const type = document.querySelector('input[name="reviewType"]:checked')?.value || "post";
+    const on = !!$("chk_medical_rounding")?.checked;
+    el.style.display = team === "ICU" && type === "pre" && on ? "block" : "none";
   }
   function updateWardOptions() {
     const type = document.querySelector('input[name="reviewType"]:checked')?.value || "post";
@@ -1557,6 +1589,7 @@
     }
     const redcap = $("btnRedcap");
     if (redcap) redcap.style.display = team === "ICU" ? "none" : "";
+    updateIcuRoundingPrompt();
   }
   function updateWardOtherVisibility() {
     const w = $("ptWardOtherWrapper");
@@ -1987,7 +2020,10 @@
     const clearBtn = $("override_clear");
     if (clearBtn) clearBtn.style.display = chosen ? "" : "none";
     if (isQuickReviewMode) {
-      if (hint) hint.textContent = `Tool has: ${autoCat.text} from the score and bloods`;
+      if (hint) {
+        const differs = chosen && chosen !== autoCat.id;
+        hint.textContent = differs ? `Tool has: ${autoCat.text} from the score and bloods` : "";
+      }
       const box2 = $("override_reason_box");
       if (box2) {
         box2.style.display = "none";
@@ -2097,18 +2133,11 @@
     newRiskLog = newRiskLog.filter((r) => !newRiskLog.some((other) => other !== r && other.text.startsWith(r.text)));
     if (!newRiskLog.length) return;
     const redCount = newRiskLog.filter((r) => r.severity === "red").length;
-    const amberCount = newRiskLog.length - redCount;
-    const counts = [
-      redCount ? `${redCount} red` : "",
-      amberCount ? `${amberCount} amber` : ""
-    ].filter(Boolean).join(" and ");
     setNotice("new-risk", {
       priority: NOTICE_PRIORITY.NEW_RISK,
       tone: redCount ? "red" : "amber",
-      html: `<div class="notice-title">\u26A0\uFE0F New risk flagged since this review started (${counts})</div>
-               <ul class="notice-list">${newRiskLog.map((r) => `<li class="${r.severity}">${r.text}</li>`).join("")}</ul>
-               <div class="notice-foot">Staged in the Review List. Add detail there or in Quick Notes, or exit to
-                   the full assessment if this needs a fuller work-up.</div>`,
+      html: `<div class="notice-title">\u26A0\uFE0F New risk flagged</div>
+               <ul class="notice-list">${newRiskLog.map((r) => `<li class="${r.severity}">${r.text}</li>`).join("")}</ul>`,
       actions: [{ id: "dismiss-new-risk", label: "Dismiss", onClick: clearNewRiskAlert }]
     });
   }
@@ -2888,6 +2917,14 @@
       const el = $(id);
       if (el && state[id] !== void 0) el.checked = state[id];
     });
+    const roundingSeg = $("seg_medical_rounding_prestepdown");
+    if (roundingSeg) {
+      const on = !!state["chk_medical_rounding"];
+      const pre = $("chk_medical_rounding_pre");
+      if (pre) pre.checked = on;
+      roundingSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.value === String(on)));
+    }
+    updateIcuRoundingPrompt();
     if (state["chk_use_mods"]) $("mods_inputs").style.display = "block";
     if (state["chk_discharge_pending_bloods"]) {
       const wrapper = $("discharge_pending_bloods_note_wrapper");
@@ -3249,7 +3286,7 @@
       lines.push("- ALERT nursing post ICU reviews continue.");
     }
     if (s.chk_medical_rounding) {
-      lines.push("- Patient added to ALERT medical rounding list for further review.");
+      lines.push(String(s.clinicianRole || "").startsWith("ICU") ? "- Referred for ALERT medical rounding - ALERT CN to be contacted." : "- Patient added to ALERT medical rounding list for further review.");
     }
     if (!s.chk_discharge_alert && !s.chk_discharge_pending_bloods && s.stepdown_suitable !== false) {
       lines.push("- Please contact ALERT if further support is required between reviews.");

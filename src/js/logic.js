@@ -215,11 +215,22 @@ export function computeAll() {
         } else if (s.chk_discharge_pending_bloods) {
             planHtml = `<div class="status" style="color:#ea580c; font-weight: 700;">Discharge pending next bloods</div>`;
         } else {
+            // No "contact ALERT if further support is required" line here. summary.js writes
+            // exactly that into the note under exactly these conditions, and the note is where
+            // it belongs: it is addressed to the ward staff who read the record, not to the
+            // ALERT nurse standing in front of this screen, who does not need telling how to
+            // reach their own service.
             planHtml = `<div class="status ${cssClass}">At least daily ALERT nursing reviews for up to ${h} post-ICU stepdown.</div>`;
-            planHtml += `<div style="margin-top:2px; font-weight:500; font-size: 0.9em; color:var(--text-light);">- Please contact ALERT if further support required between reviews.</div>`;
         }
 
-        if (s.chk_medical_rounding) planHtml += `<div style="margin-top:2px; font-weight:600; color:var(--accent);">+ Added to ALERT Medical Rounding List</div>`;
+        // Same distinction the note makes: an ICU reviewer cannot add anyone to the medical POC
+        // list, so for them this is a referral awaiting a phone call, not a completed action.
+        if (s.chk_medical_rounding) {
+            const referralOnly = String(s.clinicianRole || '').startsWith('ICU');
+            planHtml += `<div style="margin-top:2px; font-weight:600; color:var(--accent);">${referralOnly
+                ? '+ Referred for ALERT Medical Rounding - ALERT CN to be contacted'
+                : '+ Added to ALERT Medical Rounding List'}</div>`;
+        }
         const fu = $('followUpInstructions'); if (fu) fu.innerHTML = planHtml;
 
         checkCompleteness(s, countComorbs);
@@ -280,10 +291,32 @@ function renderQuickReviewDecision(s, result) {
     const onList = result.timeData?.text || '';
     const already = s.chk_discharge_alert || s.chk_discharge_pending_bloods;
 
-    // CAT 2 is deliberately silent. Asking "continue reviews, or discharge pending bloods?" at
-    // a day and a half puts the second half of that sentence in the clinician's head, which is
-    // leading - and discharge pending bloods is a decision that should arrive on its own.
+    // Pre-Stepdown the patient is not on the list yet, so there is no discharge to ask about.
+    // This used to run the post-stepdown wording regardless, and calculateWardTime returns the
+    // literal string "(Pre-Stepdown)" as its time, so the prompt read "(Pre-Stepdown) on the
+    // list - CAT 3 - can this patient be discharged from ALERT?" about a patient who had not
+    // left the unit. What the category settles here is how long ALERT will carry them once
+    // they do, so that is what it says.
     let question = null;
+    if (s.reviewType === 'pre') {
+        const preHours = { red: '72h', amber: '48h', green: '24h' }[chosen];
+        const preCat = { red: 'CAT 1', amber: 'CAT 2', green: 'CAT 3' }[chosen];
+        if (preHours) question = `${preCat} - up to ${preHours} on the ALERT list after stepdown.`;
+        if (question) {
+            discharge.hidden = false;
+            discharge.className = 'qr-discharge-prompt';
+            discharge.innerHTML = `<span class="qr-discharge-text">${question}</span>`;
+            return;
+        }
+        discharge.hidden = true; discharge.innerHTML = '';
+        return;
+    }
+
+    // CAT 2 is deliberately silent Post-Stepdown. Asking "continue reviews, or discharge
+    // pending bloods?" at a day and a half puts the second half of that sentence in the
+    // clinician's head, which is leading - and discharge pending bloods is a decision that
+    // should arrive on its own. Pre-Stepdown, above, has no such question to lead, so all
+    // three categories state their duration there.
     if (already) {
         question = 'Discharge from the ALERT list is recorded in the plan below.';
     } else if (chosen === 'green') {
