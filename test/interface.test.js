@@ -2513,3 +2513,84 @@ test('the handover line omits the score rather than stubbing it', async () => {
     assert.match(document.getElementById('handoverLine').value, /ADDS 0\./);
     close();
 });
+
+// --- A carried risk and today's assessment are one finding, not two ------------------------
+//
+// A risk the previous note recorded as mitigated deliberately bypasses the gates on import -
+// carrying it to a gate would turn a discounted risk back into a live one - so it stages as a
+// list entry and comes back with "(carried 2)" on the end. When today's assessment reaches the
+// same conclusion the rules emit their own copy, and the note printed both.
+
+test('a mitigated risk confirmed again today is stated once, keeping its carry count', async () => {
+    const { window, document, close } = await loadTool();
+    click(window, '#btnOpenImport');
+    document.getElementById('importText').value = [
+        'ALERT CNS post ICU review - Physical review',
+        'Patient: ABC | URN: ...123',
+        '',
+        'IDENTIFIED ICU READMISSION RISK FACTORS:',
+        '- Infection risk (mitigated: infection markers downtrending, ADDS 0)',
+        '',
+        'PLAN:',
+        '- ALERT nursing post ICU reviews continue.'
+    ].join('\n');
+    click(window, '#runImport');
+    await tick(window, 900);
+
+    // The reviewer confirms the same picture on the form today.
+    click(window, '#seg_infection .seg-btn[data-value="true"]');
+    await tick(window, 400);
+    click(window, '#seg_infection_downtrend .seg-btn[data-value="true"]');
+    await tick(window, 400);
+    type(window, 'adds', '0');
+    await tick(window, 700);
+
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 700);
+    const note = document.getElementById('summary').value;
+    const section = note.slice(note.indexOf('IDENTIFIED ICU READMISSION'), note.indexOf('PLAN:'));
+    const infectionLines = section.split('\n').filter(l => /Infection risk/i.test(l));
+
+    assert.equal(infectionLines.length, 1, `said twice:\n${section.trim()}`);
+    // Today's wording is what the note records, and the carry count moves onto it rather than
+    // going with the line it arrived on - it is how the next reviewer knows how long this has
+    // been running.
+    assert.match(infectionLines[0], /\(mitigated: infection markers downtrending, ADDS 0\)/);
+    assert.match(infectionLines[0], /\(carried 2\)$/);
+    close();
+});
+
+test('the reason may disagree between the two copies, and today\'s is the one kept', async () => {
+    // The carried line holds yesterday's numbers. Matching on the whole string would leave both
+    // in, reading as two findings that contradict each other about the same morning.
+    const { window, document, close } = await loadTool();
+    click(window, '#btnOpenImport');
+    document.getElementById('importText').value = [
+        'ALERT CNS post ICU review - Physical review',
+        'Patient: ABC | URN: ...123',
+        '',
+        'IDENTIFIED ICU READMISSION RISK FACTORS:',
+        '- Infection risk (mitigated: infection markers downtrending, ADDS 2) (carried 2)',
+        '',
+        'PLAN:',
+        '- ALERT nursing post ICU reviews continue.'
+    ].join('\n');
+    click(window, '#runImport');
+    await tick(window, 900);
+    click(window, '#seg_infection .seg-btn[data-value="true"]');
+    await tick(window, 400);
+    click(window, '#seg_infection_downtrend .seg-btn[data-value="true"]');
+    await tick(window, 400);
+    type(window, 'adds', '1');
+    await tick(window, 700);
+
+    generateNote(window, 'physical', 'CB');
+    await tick(window, 700);
+    const note = document.getElementById('summary').value;
+    const infectionLines = note.split('\n').filter(l => /Infection risk/i.test(l));
+    assert.equal(infectionLines.length, 1, `said twice:\n${infectionLines.join('\n')}`);
+    assert.match(infectionLines[0], /ADDS 1/, "today's numbers");
+    assert.ok(!/ADDS 2/.test(infectionLines[0]), 'not yesterday\'s');
+    assert.match(infectionLines[0], /\(carried 3\)$/, 'and the count keeps climbing');
+    close();
+});

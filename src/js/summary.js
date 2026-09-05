@@ -405,7 +405,47 @@ export function generateSummary(s, cat, wardTimeTxt, red, amber, suppressed, act
     // Computed risks come first, in the rules' own wording, because they are what drove the
     // category. Carried and typed risks follow: they belong under this heading so they survive
     // into the next note, which they did not when they were loose bullets further up.
-    const riskLines = sectionLines([...red, ...amber, ...suppressed, ...(lists.risks || [])]);
+    // sectionLines deduplicates on the exact string, which is not enough here. A risk the
+    // previous note recorded as mitigated deliberately bypasses the gates on import - carrying
+    // it to a gate would turn a discounted risk back into a live one - so it stages as a list
+    // entry and arrives with " (carried 2)" on the end. When today's assessment reaches the
+    // same conclusion, the rules emit their own copy, and the two differ by that suffix alone:
+    //
+    //   - Infection risk (mitigated: infection markers downtrending, ADDS 0)
+    //   - Infection risk (mitigated: infection markers downtrending, ADDS 0) (carried 2)
+    //
+    // They can differ by more than the suffix, because the reason carries yesterday's numbers:
+    // one line says ADDS 1 and the other ADDS 2 about the same patient on the same morning,
+    // which reads as two findings that disagree.
+    //
+    // So risks are matched on what they are about - the label in front of "(mitigated:" - and
+    // said once. Today's wording is the one kept, because today is what the note is recording,
+    // and the carry count moves onto it rather than being lost with the line it arrived on: it
+    // is how the next reviewer knows this is the third morning running.
+    const carriedSuffix = /\s*\(carried (\d+)\)\s*$/i;
+    const riskIdentity = (t) => {
+        const bare = t.replace(carriedSuffix, '').trim();
+        const mitigated = bare.match(/^(.*?)\s*\(mitigated:/i);
+        return (mitigated ? mitigated[1] : bare).toLowerCase().replace(/\s+/g, ' ').trim();
+    };
+
+    const riskLines = [];
+    const riskSeen = new Map();
+    [...red, ...amber, ...suppressed, ...(lists.risks || [])].forEach(raw => {
+        const txt = (raw || '').trim().replace(/^[-\u2022]\s*/, '');
+        const identity = riskIdentity(txt);
+        if (!txt || !identity) return;
+        if (!riskSeen.has(identity)) {
+            riskSeen.set(identity, riskLines.length);
+            riskLines.push(txt);
+            return;
+        }
+        const at = riskSeen.get(identity);
+        const kept = riskLines[at].match(carriedSuffix);
+        const dropped = txt.match(carriedSuffix);
+        const carried = Math.max(kept ? Number(kept[1]) : 1, dropped ? Number(dropped[1]) : 1);
+        if (carried > 1) riskLines[at] = `${riskLines[at].replace(carriedSuffix, '')} (carried ${carried})`;
+    });
     if (riskLines.length) { riskLines.forEach(r => lines.push(`- ${r}`)); }
     else { lines.push('- None identified'); }
     pushBlank();
